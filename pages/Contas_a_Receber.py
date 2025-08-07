@@ -44,10 +44,17 @@ with st.sidebar:
     st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Funções de Cache ---
+
+# <<<<===== AQUI ESTÁ A CORREÇÃO =====>>>>
 @st.cache_data(ttl=60)
 def carregar_clientes():
-    response = supabase.table('clientes').select('id, nome').order('nome').execute()
-    return pd.DataFrame(response.data)
+    """Busca ID e Nome APENAS de clientes marcados como ativos."""
+    try:
+        response = supabase.table('clientes').select('id, nome').eq('ativo', True).order('nome').execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"Erro ao carregar clientes ativos: {e}")
+        return pd.DataFrame()
 
 @st.cache_data(ttl=60)
 def carregar_debitos():
@@ -116,7 +123,7 @@ st.markdown("Gerencie os débitos de clientes e controle o recebimento das parce
 
 df_clientes = carregar_clientes()
 if df_clientes.empty:
-    st.warning("Cadastre um cliente primeiro na aba 'Clientes'."); st.stop()
+    st.warning("Nenhum cliente ativo cadastrado. Verifique a aba 'Clientes'."); st.stop()
 clientes_dict = pd.Series(df_clientes.id.values, index=df_clientes.nome).to_dict()
 
 tab1, tab2 = st.tabs(["🗂️ Visualizar Débitos e Parcelas", "➕ Lançar Novo Débito"])
