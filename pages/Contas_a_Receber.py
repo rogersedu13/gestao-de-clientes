@@ -6,7 +6,7 @@ from supabase import create_client, Client
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-import re # Importa a biblioteca para manipulação de texto
+import re
 
 # --- Funções de Utilidade Essenciais ---
 def conectar_supabase() -> Client:
@@ -24,10 +24,8 @@ def formatar_moeda(valor):
     if valor is None: return "R$ 0,00"
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# <<<<===== NOVA FUNÇÃO PARA LIMPAR NOMES DE ARQUIVO =====>>>>
 def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
     """Remove caracteres especiais e espaços de um nome de arquivo."""
-    # Substitui espaços e caracteres não alfanuméricos (exceto . e -) por underscore
     nome_limpo = re.sub(r'[^\w\.\-]', '_', nome_arquivo)
     return nome_limpo
 
@@ -82,27 +80,19 @@ def cadastrar_debito(cliente_id, descricao, valor_total, n_parcelas, data_inicio
     except Exception as e:
         st.error(f"Erro ao cadastrar débito: {e}"); return False
 
-# <<<<===== FUNÇÃO DE PAGAMENTO CORRIGIDA =====>>>>
 def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
     try:
         url_comprovante = None
         if comprovante_file:
-            # 1. Limpa o nome do arquivo antes de usá-lo
             nome_sanitizado = sanitizar_nome_arquivo(comprovante_file.name)
             file_path = f"comprovantes/{parcela_id}_{nome_sanitizado}"
-            
-            # 2. Tenta remover o arquivo antigo para permitir re-upload (se necessário)
             try:
-                # Busca por arquivos com o mesmo prefixo para remover versões antigas
-                prefixo = f"comprovantes/{parcela_id}_"
                 lista_arquivos = supabase.storage.from_("comprovantes").list(path="comprovantes", options={"search": f"{parcela_id}_"})
                 if lista_arquivos:
                     arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
                     supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
             except Exception:
-                pass # Ignora erro se não encontrar arquivos antigos
-
-            # 3. Faz o upload com o nome limpo
+                pass 
             supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
             url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
         
@@ -171,9 +161,24 @@ with tab1:
                     status = parcela['status']
                     if status == 'Pago':
                         cols[3].success(f"✅ Pago em {pd.to_datetime(parcela['data_pagamento']).strftime('%d/%m/%Y')}")
-                        if parcela.get('comprovante_url'): cols[4].link_button("Ver Comprovante", url=parcela['comprovante_url'], use_container_width=True)
-                        pdf_recibo = gerar_recibo_pdf(parcela, debito['nome_cliente'], debito['descricao'])
-                        cols[4].download_button(label="Gerar Recibo", data=pdf_recibo, file_name=f"recibo_p{parcela['numero_parcela']}_{debito['nome_cliente']}.pdf", mime="application/pdf", use_container_width=True)
+                        
+                        # <<<<===== AQUI ESTÁ A CORREÇÃO DE LAYOUT =====>>>>
+                        with cols[4]:
+                            # Botão para gerar o recibo sempre aparece para parcelas pagas
+                            pdf_recibo = gerar_recibo_pdf(parcela, debito['nome_cliente'], debito['descricao'])
+                            st.download_button(
+                                label="Gerar Recibo", 
+                                data=pdf_recibo, 
+                                file_name=f"recibo_p{parcela['numero_parcela']}_{debito['nome_cliente']}.pdf", 
+                                mime="application/pdf", 
+                                use_container_width=True,
+                                key=f"recibo_{parcela['id']}" # Chave única para evitar bugs
+                            )
+
+                            # Botão para ver o comprovante SÓ aparece se existir um link
+                            if parcela.get('comprovante_url'):
+                                st.link_button("Ver Comprovante", url=parcela['comprovante_url'], use_container_width=True)
+
                     elif status == 'Atrasado':
                         cols[3].error("🔴 Atrasado")
                     else:
