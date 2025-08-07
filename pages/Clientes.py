@@ -3,49 +3,23 @@ import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
 
-# --- Funções de Utilidade e Design (Agora dentro de cada arquivo) ---
-def load_custom_css():
-    st.markdown("""<style>
-        @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap');
-        :root {
-            --primary-color: #2337D9; --background-color: #0F1116; --card-background-color: #1A1C24;
-            --text-color: #FAFAFA; --subtle-text-color: #A0A4B8; --border-color: #333748;
-        }
-        body, .stApp { font-family: 'Source Sans Pro', sans-serif; background-color: var(--background-color); color: var(--text-color); }
-        h1, h2, h3 { color: var(--primary-color); font-weight: 700; }
-        .st-emotion-cache-1r4qj8v, .st-emotion-cache-1xw8zdv, [data-testid="stExpander"] {
-            background-color: var(--card-background-color); border: 1px solid var(--border-color); border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); padding: 1rem;
-        }
-        [data-testid="stExpander"] > details > summary { font-size: 1.1rem; font-weight: 600; }
-        .stButton > button {
-            border-radius: 8px; background-color: var(--primary-color); color: white; border: none; transition: background-color 0.2s;
-        }
-        .stButton > button:hover { background-color: #4A5DF2; }
-        .stButton > button:focus { box-shadow: 0 0 0 2px var(--primary-color) !important; }
-        [data-testid="stSidebar"] { background-color: var(--card-background-color); border-right: 1px solid var(--border-color); }
-        [data-testid="stMetric"] { background-color: var(--card-background-color); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; }
-        [data-testid="stMetric"] > div > div:first-child { color: var(--subtle-text-color); }
-        .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-        .stTabs [data-baseweb="tab"] { height: 44px; background-color: transparent; border-radius: 8px; }
-        .stTabs [data-baseweb="tab"]:hover { background-color: var(--card-background-color); }
-        .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: var(--primary-color); color: white; }
-        </style>""", unsafe_allow_html=True)
-
+# --- Funções de Utilidade Essenciais ---
 def conectar_supabase() -> Client:
     try:
-        url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
+        url = st.secrets["supabase_url"]
+        key = st.secrets["supabase_key"]
         return create_client(url, key)
     except Exception:
-        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets."); st.stop()
+        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets.")
+        st.stop()
 
 def check_auth(pagina: str = "esta página"):
     if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}."); st.stop()
+        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}.")
+        st.stop()
 
-# --- Autenticação, Conexão e Design ---
+# --- Autenticação e Conexão ---
 st.set_page_config(page_title="Clientes", layout="wide", page_icon="👥")
-load_custom_css()
 check_auth("a área de Clientes")
 supabase = conectar_supabase()
 
@@ -66,6 +40,7 @@ def cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
         st.error(f"Erro ao cadastrar cliente: {e}"); return False
 
 # --- Construção da Página ---
+st.image("https://placehold.co/1200x200/2337D9/FFFFFF?text=Gestão+de+Clientes", use_container_width=True)
 st.title("👥 Gestão de Clientes")
 st.markdown("Cadastre, visualize e gerencie todos os seus clientes.")
 

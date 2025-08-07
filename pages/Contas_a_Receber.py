@@ -7,35 +7,7 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
-# --- Funções de Utilidade e Design (Agora dentro de cada arquivo) ---
-def load_custom_css():
-    st.markdown("""<style>
-        @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap');
-        :root {
-            --primary-color: #2337D9; --background-color: #0F1116; --card-background-color: #1A1C24;
-            --text-color: #FAFAFA; --subtle-text-color: #A0A4B8; --border-color: #333748;
-        }
-        body, .stApp { font-family: 'Source Sans Pro', sans-serif; background-color: var(--background-color); color: var(--text-color); }
-        h1, h2, h3 { color: var(--primary-color); font-weight: 700; }
-        .st-emotion-cache-1r4qj8v, .st-emotion-cache-1xw8zdv, [data-testid="stExpander"] {
-            background-color: var(--card-background-color); border: 1px solid var(--border-color); border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); padding: 1rem;
-        }
-        [data-testid="stExpander"] > details > summary { font-size: 1.1rem; font-weight: 600; }
-        .stButton > button {
-            border-radius: 8px; background-color: var(--primary-color); color: white; border: none; transition: background-color 0.2s;
-        }
-        .stButton > button:hover { background-color: #4A5DF2; }
-        .stButton > button:focus { box-shadow: 0 0 0 2px var(--primary-color) !important; }
-        [data-testid="stSidebar"] { background-color: var(--card-background-color); border-right: 1px solid var(--border-color); }
-        [data-testid="stMetric"] { background-color: var(--card-background-color); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; }
-        [data-testid="stMetric"] > div > div:first-child { color: var(--subtle-text-color); }
-        .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-        .stTabs [data-baseweb="tab"] { height: 44px; background-color: transparent; border-radius: 8px; }
-        .stTabs [data-baseweb="tab"]:hover { background-color: var(--card-background-color); }
-        .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: var(--primary-color); color: white; }
-        </style>""", unsafe_allow_html=True)
-
+# --- Funções de Utilidade Essenciais ---
 def conectar_supabase() -> Client:
     try:
         url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
@@ -51,9 +23,8 @@ def formatar_moeda(valor):
     if valor is None: return "R$ 0,00"
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# --- Autenticação, Conexão e Design ---
+# --- Autenticação e Conexão ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
-load_custom_css()
 check_auth("a área de Contas a Receber")
 supabase = conectar_supabase()
 
@@ -124,6 +95,7 @@ def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     return buffer
 
 # --- Construção da Página ---
+st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_container_width=True)
 st.title("💸 Contas a Receber")
 st.markdown("Gerencie os débitos de clientes e controle o recebimento das parcelas.")
 
