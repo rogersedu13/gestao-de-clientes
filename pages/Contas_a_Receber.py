@@ -7,6 +7,7 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import re
+import unicodedata # Importação necessária para a nova função
 
 # --- Funções de Utilidade Essenciais ---
 def conectar_supabase() -> Client:
@@ -24,10 +25,18 @@ def formatar_moeda(valor):
     if valor is None: return "R$ 0,00"
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+# <<<<===== NOVA FUNÇÃO DE LIMPEZA À PROVA DE FALHAS =====>>>>
 def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
-    """Remove caracteres especiais e espaços de um nome de arquivo."""
-    nome_limpo = re.sub(r'[^\w\.\-]', '_', nome_arquivo)
-    return nome_limpo
+    """
+    Remove acentos e caracteres especiais de um nome de arquivo para torná-lo seguro para upload.
+    """
+    # 1. Remove acentos (ex: "MÊS" -> "MES")
+    nome_sem_acentos = "".join(c for c in unicodedata.normalize('NFD', nome_arquivo) if unicodedata.category(c) != 'Mn')
+    
+    # 2. Substitui espaços e qualquer caracter que não seja letra, número, ponto, underscore ou hífen por _
+    nome_seguro = re.sub(r'[^a-zA-Z0-9._-]', '_', nome_sem_acentos)
+    
+    return nome_seguro
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
@@ -91,7 +100,8 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
                 if lista_arquivos:
                     arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
                     supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
-            except Exception: pass
+            except Exception:
+                pass 
             supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
             url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
         
@@ -104,12 +114,10 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
     except Exception as e:
         st.error(f"Erro ao registrar pagamento: {e}"); return False
         
-# <<<<===== NOVA FUNÇÃO PARA ATUALIZAR COMPROVANTES EXISTENTES =====>>>>
 def atualizar_comprovante(parcela_id, comprovante_file):
     try:
         if not comprovante_file:
-            st.warning("Nenhum arquivo selecionado.")
-            return False
+            st.warning("Nenhum arquivo selecionado."); return False
         
         nome_sanitizado = sanitizar_nome_arquivo(comprovante_file.name)
         file_path = f"comprovantes/{parcela_id}_{nome_sanitizado}"
@@ -129,9 +137,7 @@ def atualizar_comprovante(parcela_id, comprovante_file):
         supabase.table('parcelas').update(update_data).eq('id', parcela_id).execute()
         return True
     except Exception as e:
-        st.error(f"Erro ao atualizar o comprovante: {e}")
-        return False
-
+        st.error(f"Erro ao atualizar o comprovante: {e}"); return False
 
 def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     buffer = BytesIO()
@@ -189,26 +195,20 @@ with tab1:
                     status = parcela['status']
                     if status == 'Pago':
                         cols[3].success(f"✅ Pago em {pd.to_datetime(parcela['data_pagamento']).strftime('%d/%m/%Y')}")
-                        
-                        # Botões para parcelas pagas
                         with cols[4]:
                             pdf_recibo = gerar_recibo_pdf(parcela, debito['nome_cliente'], debito['descricao'])
                             st.download_button(label="Gerar Recibo", data=pdf_recibo, file_name=f"recibo_p{parcela['numero_parcela']}_{debito['nome_cliente']}.pdf", mime="application/pdf", use_container_width=True, key=f"recibo_{parcela['id']}")
                             if parcela.get('comprovante_url'):
                                 st.link_button("Ver Comprovante", url=parcela['comprovante_url'], use_container_width=True)
-                            
-                            # <<<<===== NOVO POPOVER PARA ATUALIZAR COMPROVANTE =====>>>>
                             with st.popover("Anexar/Alterar Comprovante", use_container_width=True):
                                 with st.form(f"form_update_comp_{parcela['id']}", clear_on_submit=True):
                                     comp_update = st.file_uploader("Selecione o novo comprovante", type=['pdf', 'jpg', 'png', 'jpeg'], key=f"comp_update_{parcela['id']}")
                                     if st.form_submit_button("Salvar Novo Comprovante", type="primary"):
                                         if atualizar_comprovante(parcela['id'], comp_update):
-                                            st.success("Comprovante atualizado!")
-                                            st.cache_data.clear(); st.rerun()
-
+                                            st.success("Comprovante atualizado!"); st.cache_data.clear(); st.rerun()
                     elif status == 'Atrasado':
                         cols[3].error("🔴 Atrasado")
-                    else: # Pendente
+                    else:
                         cols[3].warning("🟡 Pendente")
 
                     if status != 'Pago':
