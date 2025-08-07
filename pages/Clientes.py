@@ -1,6 +1,7 @@
 # pages/2_Clientes.py
 import streamlit as st
 import pandas as pd
+# A linha abaixo garante que as funções de utils.py sejam reconhecidas
 from utils import check_auth, get_supabase_client
 
 # --- Autenticação e Conexão ---
@@ -22,13 +23,13 @@ with st.sidebar:
 
 # --- Funções da Página ---
 @st.cache_data(ttl=60)
-def carregar_clientes_ativos():
-    response = supabase.table('clientes').select('*').eq('ativo', True).order('nome').execute()
+def carregar_clientes_ativos(_supabase_client):
+    response = _supabase_client.table('clientes').select('*').eq('ativo', True).order('nome').execute()
     return pd.DataFrame(response.data)
 
 @st.cache_data(ttl=60)
-def carregar_clientes_arquivados():
-    response = supabase.rpc('get_clientes_arquivados').execute()
+def carregar_clientes_arquivados(_supabase_client):
+    response = _supabase_client.rpc('get_clientes_arquivados').execute()
     return pd.DataFrame(response.data)
 
 def cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
@@ -62,7 +63,7 @@ with tab_principal_1:
     tab_ativos, tab_arquivados = st.tabs(["Clientes Ativos", "Clientes Arquivados"])
     with tab_ativos:
         st.subheader("Clientes Ativos")
-        df_clientes_ativos = carregar_clientes_ativos()
+        df_clientes_ativos = carregar_clientes_ativos(supabase)
         if df_clientes_ativos.empty:
             st.info("Nenhum cliente ativo encontrado.")
         else:
@@ -81,7 +82,7 @@ with tab_principal_1:
                             st.cache_data.clear(); st.rerun()
     with tab_arquivados:
         st.subheader("Clientes Arquivados")
-        df_clientes_arquivados = carregar_clientes_arquivados()
+        df_clientes_arquivados = carregar_clientes_arquivados(supabase)
         if df_clientes_arquivados.empty:
             st.info("Nenhum cliente arquivado.")
         else:

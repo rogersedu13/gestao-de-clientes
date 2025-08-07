@@ -2,28 +2,14 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from supabase import create_client, Client
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import re
+# A linha abaixo garante que as funções de utils.py sejam reconhecidas
+from utils import check_auth, get_supabase_client, formatar_moeda
 
-# --- Funções de Utilidade Essenciais ---
-def conectar_supabase() -> Client:
-    try:
-        url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
-        return create_client(url, key)
-    except Exception:
-        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets."); st.stop()
-
-def check_auth(pagina: str = "esta página"):
-    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}."); st.stop()
-
-def formatar_moeda(valor):
-    if valor is None: return "R$ 0,00"
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
+# --- Funções de Utilidade (apenas as específicas desta página, se houver) ---
 def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
     nome_limpo = re.sub(r'[^\w\.\-]', '_', nome_arquivo)
     return nome_limpo
@@ -47,22 +33,22 @@ with st.sidebar:
 
 # --- Funções de Cache ---
 @st.cache_data(ttl=60)
-def carregar_clientes():
-    response = supabase.table('clientes').select('id, nome').eq('ativo', True).order('nome').execute()
+def carregar_clientes(_supabase_client):
+    response = _supabase_client.table('clientes').select('id, nome').eq('ativo', True).order('nome').execute()
     return pd.DataFrame(response.data)
 
 @st.cache_data(ttl=60)
-def carregar_debitos():
-    response = supabase.table('debitos').select('*, clientes(nome)').execute()
+def carregar_debitos(_supabase_client):
+    response = _supabase_client.table('debitos').select('*, clientes(nome)').execute()
     return pd.DataFrame(response.data)
 
 @st.cache_data(ttl=10)
-def carregar_parcelas(debito_id):
+def carregar_parcelas(_supabase_client, debito_id):
     if not debito_id: return pd.DataFrame()
-    response = supabase.table('parcelas').select('*').eq('debito_id', debito_id).order('numero_parcela').execute()
+    response = _supabase_client.table('parcelas').select('*').eq('debito_id', debito_id).order('numero_parcela').execute()
     return pd.DataFrame(response.data)
 
-# ... (O resto do código de Contas a Receber permanece o mesmo)
+# --- Funções de Lógica ---
 def cadastrar_debito(cliente_id, descricao, valor_total, n_parcelas, data_inicio, frequencia, forma_pagamento, obs):
     try:
         debito_data = {'cliente_id': cliente_id, 'descricao': descricao, 'valor_total': valor_total,'n_parcelas': n_parcelas, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),'frequencia': frequencia, 'forma_pagamento': forma_pagamento, 'observacoes': obs}
@@ -133,10 +119,11 @@ def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     p.showPage(); p.save(); buffer.seek(0)
     return buffer
 
+# --- Construção da Página ---
 st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_container_width=True)
 st.title("💸 Contas a Receber")
 st.markdown("Gerencie os débitos de clientes e controle o recebimento das parcelas.")
-df_clientes = carregar_clientes()
+df_clientes = carregar_clientes(supabase)
 if df_clientes.empty:
     st.warning("Nenhum cliente ativo cadastrado. Verifique a aba 'Clientes'."); st.stop()
 clientes_dict = pd.Series(df_clientes.id.values, index=df_clientes.nome).to_dict()
@@ -144,7 +131,7 @@ clientes_dict = pd.Series(df_clientes.id.values, index=df_clientes.nome).to_dict
 tab1, tab2 = st.tabs(["🗂️ Visualizar Débitos e Parcelas", "➕ Lançar Novo Débito"])
 with tab1:
     st.subheader("Débitos Ativos")
-    df_debitos = carregar_debitos()
+    df_debitos = carregar_debitos(supabase)
     if df_debitos.empty:
         st.info("Nenhum débito lançado. Adicione um na aba ao lado.")
     else:
@@ -155,7 +142,7 @@ with tab1:
         
         for _, debito in df_filtrado.iterrows():
             with st.expander(f"**{debito['nome_cliente']}** - {debito['descricao']} ({formatar_moeda(debito['valor_total'])})"):
-                df_parcelas = carregar_parcelas(debito['id'])
+                df_parcelas = carregar_parcelas(supabase, debito['id'])
                 if df_parcelas.empty:
                     st.write("Nenhuma parcela encontrada."); continue
                 
@@ -195,6 +182,7 @@ with tab1:
                                 if st.form_submit_button("Confirmar", type="primary"):
                                     if registrar_pagamento(parcela['id'], data_pgto, comprovante):
                                         st.success("Recebimento registrado!"); st.cache_data.clear(); st.rerun()
+
 with tab2:
     st.subheader("Lançar Novo Débito para um Cliente")
     with st.form("novo_debito_form", clear_on_submit=True):
