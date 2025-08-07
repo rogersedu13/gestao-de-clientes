@@ -40,8 +40,13 @@ with st.sidebar:
 
 # --- Funções da Página ---
 @st.cache_data(ttl=60)
-def carregar_clientes():
-    response = supabase.table('clientes').select('*').order('nome').execute()
+def carregar_clientes_ativos():
+    response = supabase.table('clientes').select('*').eq('ativo', True).order('nome').execute()
+    return pd.DataFrame(response.data)
+
+@st.cache_data(ttl=60)
+def carregar_clientes_arquivados():
+    response = supabase.rpc('get_clientes_arquivados').execute()
     return pd.DataFrame(response.data)
 
 def cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
@@ -54,29 +59,71 @@ def cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
     except Exception as e:
         st.error(f"Erro ao cadastrar cliente: {e}"); return False
 
+def arquivar_cliente(cliente_id):
+    try:
+        supabase.rpc('arquivar_cliente', {'p_cliente_id': cliente_id}).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao arquivar cliente: {e}"); return False
+
+def reativar_cliente(cliente_id):
+    try:
+        supabase.rpc('reativar_cliente', {'p_cliente_id': cliente_id}).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao reativar cliente: {e}"); return False
+
 # --- Construção da Página ---
 st.image("https://placehold.co/1200x200/2337D9/FFFFFF?text=Gestão+de+Clientes", use_container_width=True)
 st.title("👥 Gestão de Clientes")
 st.markdown("Cadastre, visualize e gerencie todos os seus clientes.")
 
-tab1, tab2 = st.tabs(["📋 Listar Clientes", "➕ Cadastrar Novo Cliente"])
+tab_principal_1, tab_principal_2 = st.tabs(["📋 Gerenciar Clientes", "➕ Cadastrar Novo Cliente"])
 
-with tab1:
-    st.subheader("Clientes Cadastrados")
-    df_clientes = carregar_clientes()
-    if df_clientes.empty:
-        st.info("Nenhum cliente cadastrado. Adicione um na aba ao lado.")
-    else:
-        busca = st.text_input("Buscar cliente pelo nome...")
-        if busca:
-            df_clientes = df_clientes[df_clientes['nome'].str.contains(busca, case=False)]
-        for _, row in df_clientes.iterrows():
-            with st.expander(f"**{row['nome']}** (CPF/CNPJ: {row.get('cpf_cnpj', 'N/A')})"):
-                st.markdown(f"**Email:** {row.get('contato_email', 'N/A')}")
-                st.markdown(f"**Telefone:** {row.get('contato_telefone', 'N/A')}")
-                st.markdown("**Observações:**"); st.info(row.get('observacoes', 'Nenhuma observação.'))
+with tab_principal_1:
+    tab_ativos, tab_arquivados = st.tabs(["Clientes Ativos", "Clientes Arquivados"])
 
-with tab2:
+    with tab_ativos:
+        st.subheader("Clientes Ativos")
+        df_clientes_ativos = carregar_clientes_ativos()
+        if df_clientes_ativos.empty:
+            st.info("Nenhum cliente ativo encontrado.")
+        else:
+            busca = st.text_input("Buscar cliente ativo pelo nome...", key="busca_ativos")
+            if busca:
+                df_clientes_ativos = df_clientes_ativos[df_clientes_ativos['nome'].str.contains(busca, case=False)]
+            for _, row in df_clientes_ativos.iterrows():
+                with st.expander(f"**{row['nome']}** (CPF/CNPJ: {row.get('cpf_cnpj', 'N/A')})"):
+                    st.markdown(f"**Email:** {row.get('contato_email', 'N/A')}")
+                    st.markdown(f"**Telefone:** {row.get('contato_telefone', 'N/A')}")
+                    st.markdown("**Observações:**"); st.info(row.get('observacoes', 'Nenhuma observação.'))
+                    st.markdown("---")
+                    if st.button("Arquivar Cliente", key=f"arquivar_{row['id']}", type="secondary"):
+                        if arquivar_cliente(row['id']):
+                            st.success(f"Cliente '{row['nome']}' arquivado com sucesso.")
+                            st.cache_data.clear(); st.rerun()
+
+    with tab_arquivados:
+        st.subheader("Clientes Arquivados")
+        df_clientes_arquivados = carregar_clientes_arquivados()
+        if df_clientes_arquivados.empty:
+            st.info("Nenhum cliente arquivado.")
+        else:
+            busca_arq = st.text_input("Buscar cliente arquivado pelo nome...", key="busca_arquivados")
+            if busca_arq:
+                df_clientes_arquivados = df_clientes_arquivados[df_clientes_arquivados['nome'].str.contains(busca_arq, case=False)]
+            for _, row in df_clientes_arquivados.iterrows():
+                with st.expander(f"**{row['nome']}** (CPF/CNPJ: {row.get('cpf_cnpj', 'N/A')})"):
+                    st.markdown(f"**Email:** {row.get('contato_email', 'N/A')}")
+                    st.markdown(f"**Telefone:** {row.get('contato_telefone', 'N/A')}")
+                    st.markdown("**Observações:**"); st.info(row.get('observacoes', 'Nenhuma observação.'))
+                    st.markdown("---")
+                    if st.button("Reativar Cliente", key=f"reativar_{row['id']}", type="primary"):
+                        if reativar_cliente(row['id']):
+                            st.success(f"Cliente '{row['nome']}' reativado com sucesso.")
+                            st.cache_data.clear(); st.rerun()
+
+with tab_principal_2:
     st.subheader("Cadastrar Novo Cliente")
     with st.form("cadastro_cliente_form", clear_on_submit=True):
         nome = st.text_input("Nome / Razão Social*", help="Campo obrigatório")
@@ -89,5 +136,4 @@ with tab2:
                 st.error("O campo 'Nome / Razão Social' é obrigatório.")
             else:
                 if cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
-                    st.success(f"Cliente '{nome}' cadastrado com sucesso!")
-                    st.cache_data.clear()
+                    st.success(f"Cliente '{nome}' cadastrado com sucesso!"); st.cache_data.clear()
