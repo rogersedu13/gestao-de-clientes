@@ -91,8 +91,7 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
                 if lista_arquivos:
                     arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
                     supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
-            except Exception:
-                pass 
+            except Exception: pass
             supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
             url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
         
@@ -105,6 +104,35 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
     except Exception as e:
         st.error(f"Erro ao registrar pagamento: {e}"); return False
         
+# <<<<===== NOVA FUNÇÃO PARA ATUALIZAR COMPROVANTES EXISTENTES =====>>>>
+def atualizar_comprovante(parcela_id, comprovante_file):
+    try:
+        if not comprovante_file:
+            st.warning("Nenhum arquivo selecionado.")
+            return False
+        
+        nome_sanitizado = sanitizar_nome_arquivo(comprovante_file.name)
+        file_path = f"comprovantes/{parcela_id}_{nome_sanitizado}"
+        
+        try:
+            lista_arquivos = supabase.storage.from_("comprovantes").list(path="comprovantes", options={"search": f"{parcela_id}_"})
+            if lista_arquivos:
+                arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
+                supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
+        except Exception:
+            pass
+            
+        supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
+        url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
+        
+        update_data = {'comprovante_url': url_comprovante}
+        supabase.table('parcelas').update(update_data).eq('id', parcela_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao atualizar o comprovante: {e}")
+        return False
+
+
 def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
@@ -162,26 +190,25 @@ with tab1:
                     if status == 'Pago':
                         cols[3].success(f"✅ Pago em {pd.to_datetime(parcela['data_pagamento']).strftime('%d/%m/%Y')}")
                         
-                        # <<<<===== AQUI ESTÁ A CORREÇÃO DE LAYOUT =====>>>>
+                        # Botões para parcelas pagas
                         with cols[4]:
-                            # Botão para gerar o recibo sempre aparece para parcelas pagas
                             pdf_recibo = gerar_recibo_pdf(parcela, debito['nome_cliente'], debito['descricao'])
-                            st.download_button(
-                                label="Gerar Recibo", 
-                                data=pdf_recibo, 
-                                file_name=f"recibo_p{parcela['numero_parcela']}_{debito['nome_cliente']}.pdf", 
-                                mime="application/pdf", 
-                                use_container_width=True,
-                                key=f"recibo_{parcela['id']}" # Chave única para evitar bugs
-                            )
-
-                            # Botão para ver o comprovante SÓ aparece se existir um link
+                            st.download_button(label="Gerar Recibo", data=pdf_recibo, file_name=f"recibo_p{parcela['numero_parcela']}_{debito['nome_cliente']}.pdf", mime="application/pdf", use_container_width=True, key=f"recibo_{parcela['id']}")
                             if parcela.get('comprovante_url'):
                                 st.link_button("Ver Comprovante", url=parcela['comprovante_url'], use_container_width=True)
+                            
+                            # <<<<===== NOVO POPOVER PARA ATUALIZAR COMPROVANTE =====>>>>
+                            with st.popover("Anexar/Alterar Comprovante", use_container_width=True):
+                                with st.form(f"form_update_comp_{parcela['id']}", clear_on_submit=True):
+                                    comp_update = st.file_uploader("Selecione o novo comprovante", type=['pdf', 'jpg', 'png', 'jpeg'], key=f"comp_update_{parcela['id']}")
+                                    if st.form_submit_button("Salvar Novo Comprovante", type="primary"):
+                                        if atualizar_comprovante(parcela['id'], comp_update):
+                                            st.success("Comprovante atualizado!")
+                                            st.cache_data.clear(); st.rerun()
 
                     elif status == 'Atrasado':
                         cols[3].error("🔴 Atrasado")
-                    else:
+                    else: # Pendente
                         cols[3].warning("🟡 Pendente")
 
                     if status != 'Pago':
