@@ -31,11 +31,7 @@ def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
 check_auth("a área de Contas a Receber")
-supabase = conectar_supabase()
-
-# Reforço da sessão de autenticação em cada página
-if 'user_session' in st.session_state:
-    supabase.auth.set_session(st.session_state.user_session['access_token'], st.session_state.user_session['refresh_token'])
+supabase = get_supabase_client() # Pega a conexão já autenticada
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -55,7 +51,6 @@ def carregar_clientes():
     response = supabase.table('clientes').select('id, nome').eq('ativo', True).order('nome').execute()
     return pd.DataFrame(response.data)
 
-# ... (O resto do código de Contas a Receber permanece o mesmo)
 @st.cache_data(ttl=60)
 def carregar_debitos():
     response = supabase.table('debitos').select('*, clientes(nome)').execute()
@@ -67,6 +62,7 @@ def carregar_parcelas(debito_id):
     response = supabase.table('parcelas').select('*').eq('debito_id', debito_id).order('numero_parcela').execute()
     return pd.DataFrame(response.data)
 
+# ... (O resto do código de Contas a Receber permanece o mesmo)
 def cadastrar_debito(cliente_id, descricao, valor_total, n_parcelas, data_inicio, frequencia, forma_pagamento, obs):
     try:
         debito_data = {'cliente_id': cliente_id, 'descricao': descricao, 'valor_total': valor_total,'n_parcelas': n_parcelas, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),'frequencia': frequencia, 'forma_pagamento': forma_pagamento, 'observacoes': obs}
@@ -199,7 +195,6 @@ with tab1:
                                 if st.form_submit_button("Confirmar", type="primary"):
                                     if registrar_pagamento(parcela['id'], data_pgto, comprovante):
                                         st.success("Recebimento registrado!"); st.cache_data.clear(); st.rerun()
-
 with tab2:
     st.subheader("Lançar Novo Débito para um Cliente")
     with st.form("novo_debito_form", clear_on_submit=True):

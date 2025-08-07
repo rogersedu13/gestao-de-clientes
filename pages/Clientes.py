@@ -1,28 +1,12 @@
 # pages/2_Clientes.py
 import streamlit as st
 import pandas as pd
-from supabase import create_client, Client
-
-# --- Funções de Utilidade Essenciais ---
-def conectar_supabase() -> Client:
-    try:
-        url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
-        return create_client(url, key)
-    except Exception:
-        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets."); st.stop()
-
-def check_auth(pagina: str = "esta página"):
-    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}."); st.stop()
+from utils import check_auth, get_supabase_client
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Clientes", layout="wide", page_icon="👥")
 check_auth("a área de Clientes")
-supabase = conectar_supabase()
-
-# Reforço da sessão de autenticação em cada página
-if 'user_session' in st.session_state:
-    supabase.auth.set_session(st.session_state.user_session['access_token'], st.session_state.user_session['refresh_token'])
+supabase = get_supabase_client() # Pega a conexão já autenticada
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -74,7 +58,6 @@ st.title("👥 Gestão de Clientes")
 st.markdown("Cadastre, visualize e gerencie todos os seus clientes.")
 
 tab_principal_1, tab_principal_2 = st.tabs(["📋 Gerenciar Clientes", "➕ Cadastrar Novo Cliente"])
-
 with tab_principal_1:
     tab_ativos, tab_arquivados = st.tabs(["Clientes Ativos", "Clientes Arquivados"])
     with tab_ativos:
