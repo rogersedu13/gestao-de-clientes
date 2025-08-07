@@ -27,6 +27,21 @@ st.set_page_config(page_title="Dashboard", layout="wide", page_icon="📊")
 check_auth("o Dashboard")
 supabase = conectar_supabase()
 
+# --- Lógica da Sidebar ---
+with st.sidebar:
+    st.header("Modo de Acesso")
+    if st.session_state.get('logged_in'):
+        st.success(f"Logado como: {st.session_state.user_email}")
+        if st.button("Logout", use_container_width=True):
+            supabase.auth.sign_out()
+            for key in st.session_state.keys():
+                del st.session_state[key]
+            st.rerun()
+    
+    # --- Créditos no Rodapé da Sidebar ---
+    st.markdown("---")
+    st.info("Desenvolvido por @Rogerio Souza")
+
 # --- Funções da Página ---
 @st.cache_data(ttl=600)
 def carregar_dados_dashboard():
