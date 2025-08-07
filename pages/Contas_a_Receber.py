@@ -94,7 +94,8 @@ def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
 
 # --- Construção da Página ---
 st.set_page_config(page_title="Contas a Receber", layout="wide")
-st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_column_width=True)
+# AQUI ESTÁ A CORREÇÃO: trocado 'use_column_width' por 'use_container_width'
+st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_container_width=True)
 st.title("💸 Contas a Receber")
 st.markdown("Gerencie os débitos de clientes e controle o recebimento das parcelas.")
 

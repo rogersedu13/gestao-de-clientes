@@ -29,7 +29,8 @@ def cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
 
 # --- Construção da Página ---
 st.set_page_config(page_title="Clientes", layout="wide")
-st.image("https://placehold.co/1200x200/2337D9/FFFFFF?text=Gestão+de+Clientes", use_column_width=True)
+# AQUI ESTÁ A CORREÇÃO: trocado 'use_column_width' por 'use_container_width'
+st.image("https://placehold.co/1200x200/2337D9/FFFFFF?text=Gestão+de+Clientes", use_container_width=True)
 st.title("👥 Gestão de Clientes")
 st.markdown("Cadastre, visualize e gerencie todos os seus clientes.")
 
