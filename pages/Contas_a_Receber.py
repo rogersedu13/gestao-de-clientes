@@ -9,10 +9,8 @@ from reportlab.lib.pagesizes import letter
 import re
 from utils import check_auth, get_supabase_client, formatar_moeda
 
-# --- Funções de Utilidade ---
-def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
-    nome_limpo = re.sub(r'[^\w\.\-]', '_', nome_arquivo)
-    return nome_limpo
+# --- Funções de Utilidade Essenciais ---
+# A função sanitizar_nome_arquivo foi removida por não ser mais necessária
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
@@ -63,14 +61,18 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
     try:
         url_comprovante = None
         if comprovante_file:
-            nome_sanitizado = sanitizar_nome_arquivo(comprovante_file.name)
-            file_path = f"comprovantes/{parcela_id}_{nome_sanitizado}"
+            # Usando uma limpeza simples para o nome do arquivo
+            nome_arquivo_limpo = "".join(c for c in comprovante_file.name if c.isalnum() or c in (' ', '.', '_')).rstrip().replace(' ', '_')
+            file_path = f"comprovantes/{parcela_id}_{nome_arquivo_limpo}"
+            
+            # Remove arquivos antigos para permitir re-upload, se necessário
             try:
                 lista_arquivos = supabase.storage.from_("comprovantes").list(path="comprovantes", options={"search": f"{parcela_id}_"})
                 if lista_arquivos:
                     arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
                     supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
             except Exception: pass
+            
             supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
             url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
         
@@ -80,30 +82,6 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
     except Exception as e:
         st.error(f"Erro ao registrar pagamento: {e}"); return False
         
-def atualizar_comprovante(parcela_id, comprovante_file):
-    try:
-        if not comprovante_file:
-            st.warning("Nenhum arquivo selecionado."); return False
-        
-        nome_sanitizado = sanitizar_nome_arquivo(comprovante_file.name)
-        file_path = f"comprovantes/{parcela_id}_{nome_sanitizado}"
-        
-        try:
-            lista_arquivos = supabase.storage.from_("comprovantes").list(path="comprovantes", options={"search": f"{parcela_id}_"})
-            if lista_arquivos:
-                arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
-                supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
-        except Exception: pass
-            
-        supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
-        url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
-        
-        update_data = {'comprovante_url': url_comprovante}
-        supabase.table('parcelas').update(update_data).eq('id', parcela_id).execute()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao atualizar o comprovante: {e}"); return False
-
 def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
@@ -119,6 +97,7 @@ def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     p.showPage(); p.save(); buffer.seek(0)
     return buffer
 
+# --- Construção da Página ---
 st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_container_width=True)
 st.title("💸 Contas a Receber")
 st.markdown("Gerencie os débitos de clientes e controle o recebimento das parcelas.")
@@ -162,12 +141,6 @@ with tab1:
                             st.download_button(label="Gerar Recibo", data=pdf_recibo, file_name=f"recibo_p{parcela['numero_parcela']}_{debito['nome_cliente']}.pdf", mime="application/pdf", use_container_width=True, key=f"recibo_{parcela['id']}")
                             if parcela.get('comprovante_url'):
                                 st.link_button("Ver Comprovante", url=parcela['comprovante_url'], use_container_width=True)
-                            with st.popover("Anexar/Alterar Comprovante", use_container_width=True):
-                                with st.form(f"form_update_comp_{parcela['id']}", clear_on_submit=True):
-                                    comp_update = st.file_uploader("Selecione o novo comprovante", type=['pdf', 'jpg', 'png', 'jpeg'], key=f"comp_update_{parcela['id']}")
-                                    if st.form_submit_button("Salvar Novo Comprovante", type="primary"):
-                                        if atualizar_comprovante(parcela['id'], comp_update):
-                                            st.success("Comprovante atualizado!"); st.cache_data.clear(); st.rerun()
                     elif status == 'Atrasado':
                         cols[3].error("🔴 Atrasado")
                     else:
