@@ -2,10 +2,54 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from utils import check_auth, conectar_supabase, formatar_moeda, load_custom_css
+from supabase import create_client, Client
+from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from io import BytesIO
+
+# --- Funções de Utilidade e Design (Agora dentro de cada arquivo) ---
+def load_custom_css():
+    st.markdown("""<style>
+        @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap');
+        :root {
+            --primary-color: #2337D9; --background-color: #0F1116; --card-background-color: #1A1C24;
+            --text-color: #FAFAFA; --subtle-text-color: #A0A4B8; --border-color: #333748;
+        }
+        body, .stApp { font-family: 'Source Sans Pro', sans-serif; background-color: var(--background-color); color: var(--text-color); }
+        h1, h2, h3 { color: var(--primary-color); font-weight: 700; }
+        .st-emotion-cache-1r4qj8v, .st-emotion-cache-1xw8zdv, [data-testid="stExpander"] {
+            background-color: var(--card-background-color); border: 1px solid var(--border-color); border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); padding: 1rem;
+        }
+        [data-testid="stExpander"] > details > summary { font-size: 1.1rem; font-weight: 600; }
+        .stButton > button {
+            border-radius: 8px; background-color: var(--primary-color); color: white; border: none; transition: background-color 0.2s;
+        }
+        .stButton > button:hover { background-color: #4A5DF2; }
+        .stButton > button:focus { box-shadow: 0 0 0 2px var(--primary-color) !important; }
+        [data-testid="stSidebar"] { background-color: var(--card-background-color); border-right: 1px solid var(--border-color); }
+        [data-testid="stMetric"] { background-color: var(--card-background-color); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; }
+        [data-testid="stMetric"] > div > div:first-child { color: var(--subtle-text-color); }
+        .stTabs [data-baseweb="tab-list"] { gap: 24px; }
+        .stTabs [data-baseweb="tab"] { height: 44px; background-color: transparent; border-radius: 8px; }
+        .stTabs [data-baseweb="tab"]:hover { background-color: var(--card-background-color); }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: var(--primary-color); color: white; }
+        </style>""", unsafe_allow_html=True)
+
+def conectar_supabase() -> Client:
+    try:
+        url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
+        return create_client(url, key)
+    except Exception:
+        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets."); st.stop()
+
+def check_auth(pagina: str = "esta página"):
+    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
+        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}."); st.stop()
+
+def formatar_moeda(valor):
+    if valor is None: return "R$ 0,00"
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # --- Autenticação, Conexão e Design ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
@@ -13,7 +57,7 @@ load_custom_css()
 check_auth("a área de Contas a Receber")
 supabase = conectar_supabase()
 
-# (As funções de cache e lógica permanecem as mesmas do código anterior)
+# --- Funções de Cache ---
 @st.cache_data(ttl=60)
 def carregar_clientes():
     response = supabase.table('clientes').select('id, nome').order('nome').execute()
@@ -30,6 +74,7 @@ def carregar_parcelas(debito_id):
     response = supabase.table('parcelas').select('*').eq('debito_id', debito_id).order('numero_parcela').execute()
     return pd.DataFrame(response.data)
 
+# --- Funções de Lógica ---
 def cadastrar_debito(cliente_id, descricao, valor_total, n_parcelas, data_inicio, frequencia, forma_pagamento, obs):
     try:
         debito_data = {
@@ -37,7 +82,7 @@ def cadastrar_debito(cliente_id, descricao, valor_total, n_parcelas, data_inicio
             'n_parcelas': n_parcelas, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),
             'frequencia': frequencia, 'forma_pagamento': forma_pagamento, 'observacoes': obs
         }
-        response = supabase.table('debitos').insert(debito_data).execute()
+        response = supabase.table('debitos').insert(debito_data, count='exact').execute()
         novo_debito_id = response.data[0]['id']
         supabase.rpc('gerar_parcelas', {'debito_id_param': novo_debito_id}).execute()
         return True
@@ -49,11 +94,8 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
         url_comprovante = None
         if comprovante_file:
             file_path = f"comprovantes/{parcela_id}_{comprovante_file.name}"
-            # Remove o arquivo antigo se existir, para permitir re-upload
-            try:
-                supabase.storage.from_("comprovantes").remove([file_path])
-            except Exception:
-                pass # Ignora erro se o arquivo não existir
+            try: supabase.storage.from_("comprovantes").remove([file_path])
+            except Exception: pass
             supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
             url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
         
@@ -118,26 +160,25 @@ with tab1:
                     cols[1].markdown(f"{formatar_moeda(parcela['valor_parcela'])}")
                     cols[2].markdown(f"Vence: {parcela['data_vencimento'].strftime('%d/%m/%Y')}")
                     
-                    if parcela['status'] == 'Pago':
+                    status = parcela['status']
+                    if status == 'Pago':
                         cols[3].success(f"✅ Pago em {pd.to_datetime(parcela['data_pagamento']).strftime('%d/%m/%Y')}")
-                        if parcela.get('comprovante_url'):
-                            cols[4].link_button("Ver Comprovante", url=parcela['comprovante_url'])
+                        if parcela.get('comprovante_url'): cols[4].link_button("Ver Comprovante", url=parcela['comprovante_url'])
                         pdf_recibo = gerar_recibo_pdf(parcela, debito['nome_cliente'], debito['descricao'])
                         cols[4].download_button(label="Gerar Recibo", data=pdf_recibo, file_name=f"recibo_p{parcela['numero_parcela']}_{debito['nome_cliente']}.pdf", mime="application/pdf")
-                    elif parcela['status'] == 'Atrasado':
+                    elif status == 'Atrasado':
                         cols[3].error("🔴 Atrasado")
                     else:
                         cols[3].warning("🟡 Pendente")
 
-                    if parcela['status'] != 'Pago':
+                    if status != 'Pago':
                         with cols[4].popover("Registrar Recebimento", use_container_width=True):
                             with st.form(f"form_pagamento_{parcela['id']}", clear_on_submit=True):
                                 data_pgto = st.date_input("Data do Recebimento", value=date.today(), key=f"data_{parcela['id']}")
                                 comprovante = st.file_uploader("Anexar Comprovante", type=['pdf', 'jpg', 'png', 'jpeg'], key=f"comp_{parcela['id']}")
                                 if st.form_submit_button("Confirmar", type="primary"):
                                     if registrar_pagamento(parcela['id'], data_pgto, comprovante):
-                                        st.success("Recebimento registrado!")
-                                        st.cache_data.clear(); st.rerun()
+                                        st.success("Recebimento registrado!"); st.cache_data.clear(); st.rerun()
 
 with tab2:
     st.subheader("Lançar Novo Débito para um Cliente")
