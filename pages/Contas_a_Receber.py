@@ -2,14 +2,14 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+from supabase import create_client, Client
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import re
-# A linha abaixo garante que as funções de utils.py sejam reconhecidas
 from utils import check_auth, get_supabase_client, formatar_moeda
 
-# --- Funções de Utilidade (apenas as específicas desta página, se houver) ---
+# --- Funções de Utilidade ---
 def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
     nome_limpo = re.sub(r'[^\w\.\-]', '_', nome_arquivo)
     return nome_limpo
@@ -17,7 +17,7 @@ def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
 check_auth("a área de Contas a Receber")
-supabase = get_supabase_client() # Pega a conexão já autenticada
+supabase = get_supabase_client() # Pega a conexão já autenticada da sessão
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -119,7 +119,6 @@ def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     p.showPage(); p.save(); buffer.seek(0)
     return buffer
 
-# --- Construção da Página ---
 st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_container_width=True)
 st.title("💸 Contas a Receber")
 st.markdown("Gerencie os débitos de clientes e controle o recebimento das parcelas.")
@@ -182,7 +181,6 @@ with tab1:
                                 if st.form_submit_button("Confirmar", type="primary"):
                                     if registrar_pagamento(parcela['id'], data_pgto, comprovante):
                                         st.success("Recebimento registrado!"); st.cache_data.clear(); st.rerun()
-
 with tab2:
     st.subheader("Lançar Novo Débito para um Cliente")
     with st.form("novo_debito_form", clear_on_submit=True):

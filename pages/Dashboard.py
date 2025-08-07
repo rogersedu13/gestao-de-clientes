@@ -1,13 +1,12 @@
 # pages/1_Dashboard.py
 import streamlit as st
 import pandas as pd
-# A linha abaixo garante que as funções de utils.py sejam reconhecidas
 from utils import check_auth, get_supabase_client, formatar_moeda
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Dashboard", layout="wide", page_icon="📊")
 check_auth("o Dashboard")
-supabase = get_supabase_client() # Pega a conexão já autenticada
+supabase = get_supabase_client() # Pega a conexão já autenticada da sessão
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -24,7 +23,6 @@ with st.sidebar:
 # --- Funções da Página ---
 @st.cache_data(ttl=600)
 def carregar_dados_dashboard(_supabase_client):
-    # Passamos o cliente como argumento para invalidar o cache se a conexão mudar
     parcelas_response = _supabase_client.table('parcelas').select('*, clientes(nome)').execute()
     return pd.DataFrame(parcelas_response.data)
 
@@ -37,6 +35,7 @@ df_parcelas = carregar_dados_dashboard(supabase)
 if df_parcelas.empty:
     st.info("Ainda não há dados de parcelas para exibir no dashboard."); st.stop()
 
+# (O resto do código desta página continua exatamente o mesmo)
 df_parcelas['valor_parcela'] = pd.to_numeric(df_parcelas['valor_parcela'])
 df_parcelas['data_vencimento'] = pd.to_datetime(df_parcelas['data_vencimento'])
 

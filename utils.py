@@ -2,14 +2,11 @@
 import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
-from datetime import date
-
-# --- Funções de Conexão e Autenticação Centralizadas ---
 
 def get_supabase_client() -> Client:
     """
-    Cria e retorna um cliente Supabase, restaurando a sessão do usuário se existir.
-    Esta função é o coração da nossa nova estratégia de autenticação.
+    Cria uma conexão na primeira vez ou retorna a conexão já autenticada
+    que está guardada na memória da sessão. Esta é a chave da solução.
     """
     if 'supabase_client' in st.session_state:
         return st.session_state.supabase_client

@@ -1,13 +1,12 @@
 # pages/2_Clientes.py
 import streamlit as st
 import pandas as pd
-# A linha abaixo garante que as funções de utils.py sejam reconhecidas
 from utils import check_auth, get_supabase_client
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Clientes", layout="wide", page_icon="👥")
 check_auth("a área de Clientes")
-supabase = get_supabase_client() # Pega a conexão já autenticada
+supabase = get_supabase_client() # Pega a conexão já autenticada da sessão
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -58,6 +57,7 @@ st.image("https://placehold.co/1200x200/2337D9/FFFFFF?text=Gestão+de+Clientes",
 st.title("👥 Gestão de Clientes")
 st.markdown("Cadastre, visualize e gerencie todos os seus clientes.")
 
+# ... (O resto do código desta página continua exatamente o mesmo)
 tab_principal_1, tab_principal_2 = st.tabs(["📋 Gerenciar Clientes", "➕ Cadastrar Novo Cliente"])
 with tab_principal_1:
     tab_ativos, tab_arquivados = st.tabs(["Clientes Ativos", "Clientes Arquivados"])
@@ -99,7 +99,6 @@ with tab_principal_1:
                         if reativar_cliente(row['id']):
                             st.success(f"Cliente '{row['nome']}' reativado com sucesso.")
                             st.cache_data.clear(); st.rerun()
-
 with tab_principal_2:
     st.subheader("Cadastrar Novo Cliente")
     with st.form("cadastro_cliente_form", clear_on_submit=True):
