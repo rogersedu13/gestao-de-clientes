@@ -13,21 +13,32 @@ def conectar_supabase() -> Client:
         st.stop()
 
 # --- Configuração da Página ---
-st.set_page_config(
-    page_title="Gestão de Clientes",
-    page_icon="🏗️",
-    layout="centered"
-)
+st.set_page_config(page_title="Gestão de Clientes | Construtora", page_icon="🏗️", layout="centered")
 
 # --- Inicialização ---
 supabase = conectar_supabase()
-if 'logged_in' not in st.session_state:
+
+# Lógica para tentar restaurar a sessão a partir do cache do Streamlit
+if 'user_session' in st.session_state:
+    try:
+        # Define a sessão no cliente supabase para que as chamadas sejam autenticadas
+        supabase.auth.set_session(
+            st.session_state.user_session['access_token'], 
+            st.session_state.user_session['refresh_token']
+        )
+        st.session_state.logged_in = True
+    except Exception:
+        # Se a sessão expirou ou deu erro, força o logout
+        st.session_state.logged_in = False
+        del st.session_state['user_session']
+elif 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
+
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
     st.header("Modo de Acesso")
-    if st.session_state.logged_in:
+    if st.session_state.get('logged_in'):
         st.success(f"Logado como: {st.session_state.user_email}")
         if st.button("Logout", use_container_width=True):
             supabase.auth.sign_out()
@@ -36,15 +47,12 @@ with st.sidebar:
             st.rerun()
     else:
         st.info("Por favor, faça o login para continuar.")
-    
-    # --- Créditos no Rodapé da Sidebar ---
     st.markdown("---")
     st.info("Desenvolvido por @Rogerio Souza")
 
-
 # --- Tela de Login ---
 st.title("🏗️ Sistema de Gestão de Clientes")
-st.header("Acesso ao Painel")
+st.header("Acesso ao Painel da Construtora")
 
 if not st.session_state.logged_in:
     with st.form("login_form"):
@@ -55,9 +63,14 @@ if not st.session_state.logged_in:
         if submitted:
             with st.spinner("Autenticando..."):
                 try:
-                    user = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                    user_session_obj = supabase.auth.sign_in_with_password({"email": email, "password": password})
                     st.session_state.logged_in = True
-                    st.session_state.user_email = user.user.email
+                    st.session_state.user_email = user_session_obj.user.email
+                    # Armazena a sessão completa para revalidação nas outras páginas
+                    st.session_state.user_session = {
+                        "access_token": user_session_obj.session.access_token,
+                        "refresh_token": user_session_obj.session.refresh_token
+                    }
                     st.rerun() 
                 except Exception as e:
                     st.error("Falha no login. Verifique seu email e senha.")

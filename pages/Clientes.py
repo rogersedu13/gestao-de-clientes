@@ -6,22 +6,23 @@ from supabase import create_client, Client
 # --- Funções de Utilidade Essenciais ---
 def conectar_supabase() -> Client:
     try:
-        url = st.secrets["supabase_url"]
-        key = st.secrets["supabase_key"]
+        url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
         return create_client(url, key)
     except Exception:
-        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets.")
-        st.stop()
+        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets."); st.stop()
 
 def check_auth(pagina: str = "esta página"):
     if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}.")
-        st.stop()
+        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}."); st.stop()
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Clientes", layout="wide", page_icon="👥")
 check_auth("a área de Clientes")
 supabase = conectar_supabase()
+
+# Reforço da sessão de autenticação em cada página
+if 'user_session' in st.session_state:
+    supabase.auth.set_session(st.session_state.user_session['access_token'], st.session_state.user_session['refresh_token'])
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -33,10 +34,7 @@ with st.sidebar:
             for key in st.session_state.keys():
                 del st.session_state[key]
             st.rerun()
-    
-    # --- Créditos no Rodapé da Sidebar ---
-    st.markdown("---")
-    st.info("Desenvolvido por @Rogerio Souza")
+    st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Funções da Página ---
 @st.cache_data(ttl=60)
@@ -51,10 +49,7 @@ def carregar_clientes_arquivados():
 
 def cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
     try:
-        supabase.table('clientes').insert({
-            'nome': nome, 'cpf_cnpj': cpf_cnpj, 'contato_telefone': telefone,
-            'contato_email': email, 'observacoes': obs
-        }).execute()
+        supabase.table('clientes').insert({'nome': nome, 'cpf_cnpj': cpf_cnpj, 'contato_telefone': telefone, 'contato_email': email, 'observacoes': obs}).execute()
         return True
     except Exception as e:
         st.error(f"Erro ao cadastrar cliente: {e}"); return False
@@ -82,7 +77,6 @@ tab_principal_1, tab_principal_2 = st.tabs(["📋 Gerenciar Clientes", "➕ Cada
 
 with tab_principal_1:
     tab_ativos, tab_arquivados = st.tabs(["Clientes Ativos", "Clientes Arquivados"])
-
     with tab_ativos:
         st.subheader("Clientes Ativos")
         df_clientes_ativos = carregar_clientes_ativos()
@@ -102,7 +96,6 @@ with tab_principal_1:
                         if arquivar_cliente(row['id']):
                             st.success(f"Cliente '{row['nome']}' arquivado com sucesso.")
                             st.cache_data.clear(); st.rerun()
-
     with tab_arquivados:
         st.subheader("Clientes Arquivados")
         df_clientes_arquivados = carregar_clientes_arquivados()

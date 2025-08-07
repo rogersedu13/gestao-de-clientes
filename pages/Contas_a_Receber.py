@@ -7,7 +7,6 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import re
-import unicodedata # Importação necessária para a nova função
 
 # --- Funções de Utilidade Essenciais ---
 def conectar_supabase() -> Client:
@@ -25,23 +24,18 @@ def formatar_moeda(valor):
     if valor is None: return "R$ 0,00"
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# <<<<===== NOVA FUNÇÃO DE LIMPEZA À PROVA DE FALHAS =====>>>>
 def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
-    """
-    Remove acentos e caracteres especiais de um nome de arquivo para torná-lo seguro para upload.
-    """
-    # 1. Remove acentos (ex: "MÊS" -> "MES")
-    nome_sem_acentos = "".join(c for c in unicodedata.normalize('NFD', nome_arquivo) if unicodedata.category(c) != 'Mn')
-    
-    # 2. Substitui espaços e qualquer caracter que não seja letra, número, ponto, underscore ou hífen por _
-    nome_seguro = re.sub(r'[^a-zA-Z0-9._-]', '_', nome_sem_acentos)
-    
-    return nome_seguro
+    nome_limpo = re.sub(r'[^\w\.\-]', '_', nome_arquivo)
+    return nome_limpo
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
 check_auth("a área de Contas a Receber")
 supabase = conectar_supabase()
+
+# Reforço da sessão de autenticação em cada página
+if 'user_session' in st.session_state:
+    supabase.auth.set_session(st.session_state.user_session['access_token'], st.session_state.user_session['refresh_token'])
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -53,9 +47,7 @@ with st.sidebar:
             for key in st.session_state.keys():
                 del st.session_state[key]
             st.rerun()
-    
-    st.markdown("---")
-    st.info("Desenvolvido por @Rogerio Souza")
+    st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Funções de Cache ---
 @st.cache_data(ttl=60)
@@ -63,6 +55,7 @@ def carregar_clientes():
     response = supabase.table('clientes').select('id, nome').eq('ativo', True).order('nome').execute()
     return pd.DataFrame(response.data)
 
+# ... (O resto do código de Contas a Receber permanece o mesmo)
 @st.cache_data(ttl=60)
 def carregar_debitos():
     response = supabase.table('debitos').select('*, clientes(nome)').execute()
@@ -74,14 +67,9 @@ def carregar_parcelas(debito_id):
     response = supabase.table('parcelas').select('*').eq('debito_id', debito_id).order('numero_parcela').execute()
     return pd.DataFrame(response.data)
 
-# --- Funções de Lógica ---
 def cadastrar_debito(cliente_id, descricao, valor_total, n_parcelas, data_inicio, frequencia, forma_pagamento, obs):
     try:
-        debito_data = {
-            'cliente_id': cliente_id, 'descricao': descricao, 'valor_total': valor_total,
-            'n_parcelas': n_parcelas, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),
-            'frequencia': frequencia, 'forma_pagamento': forma_pagamento, 'observacoes': obs
-        }
+        debito_data = {'cliente_id': cliente_id, 'descricao': descricao, 'valor_total': valor_total,'n_parcelas': n_parcelas, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),'frequencia': frequencia, 'forma_pagamento': forma_pagamento, 'observacoes': obs}
         response = supabase.table('debitos').insert(debito_data, count='exact').execute()
         novo_debito_id = response.data[0]['id']
         supabase.rpc('gerar_parcelas', {'debito_id_param': novo_debito_id}).execute()
@@ -100,15 +88,11 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
                 if lista_arquivos:
                     arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
                     supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
-            except Exception:
-                pass 
+            except Exception: pass
             supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
             url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
         
-        update_data = {
-            'status': 'Pago', 'data_pagamento': data_pagamento.strftime('%Y-%m-%d'),
-            'comprovante_url': url_comprovante
-        }
+        update_data = {'status': 'Pago', 'data_pagamento': data_pagamento.strftime('%Y-%m-%d'),'comprovante_url': url_comprovante}
         supabase.table('parcelas').update(update_data).eq('id', parcela_id).execute()
         return True
     except Exception as e:
@@ -127,8 +111,7 @@ def atualizar_comprovante(parcela_id, comprovante_file):
             if lista_arquivos:
                 arquivos_para_remover = [f"comprovantes/{arquivo['name']}" for arquivo in lista_arquivos]
                 supabase.storage.from_("comprovantes").remove(arquivos_para_remover)
-        except Exception:
-            pass
+        except Exception: pass
             
         supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
         url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
@@ -154,18 +137,15 @@ def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     p.showPage(); p.save(); buffer.seek(0)
     return buffer
 
-# --- Construção da Página ---
 st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_container_width=True)
 st.title("💸 Contas a Receber")
 st.markdown("Gerencie os débitos de clientes e controle o recebimento das parcelas.")
-
 df_clientes = carregar_clientes()
 if df_clientes.empty:
     st.warning("Nenhum cliente ativo cadastrado. Verifique a aba 'Clientes'."); st.stop()
 clientes_dict = pd.Series(df_clientes.id.values, index=df_clientes.nome).to_dict()
 
 tab1, tab2 = st.tabs(["🗂️ Visualizar Débitos e Parcelas", "➕ Lançar Novo Débito"])
-
 with tab1:
     st.subheader("Débitos Ativos")
     df_debitos = carregar_debitos()

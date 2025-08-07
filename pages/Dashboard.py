@@ -6,17 +6,14 @@ from supabase import create_client, Client
 # --- Funções de Utilidade Essenciais ---
 def conectar_supabase() -> Client:
     try:
-        url = st.secrets["supabase_url"]
-        key = st.secrets["supabase_key"]
+        url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
         return create_client(url, key)
     except Exception:
-        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets.")
-        st.stop()
+        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets."); st.stop()
 
 def check_auth(pagina: str = "esta página"):
     if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}.")
-        st.stop()
+        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}."); st.stop()
 
 def formatar_moeda(valor):
     if valor is None: return "R$ 0,00"
@@ -26,6 +23,10 @@ def formatar_moeda(valor):
 st.set_page_config(page_title="Dashboard", layout="wide", page_icon="📊")
 check_auth("o Dashboard")
 supabase = conectar_supabase()
+
+# Reforço da sessão de autenticação em cada página
+if 'user_session' in st.session_state:
+    supabase.auth.set_session(st.session_state.user_session['access_token'], st.session_state.user_session['refresh_token'])
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -37,10 +38,7 @@ with st.sidebar:
             for key in st.session_state.keys():
                 del st.session_state[key]
             st.rerun()
-    
-    # --- Créditos no Rodapé da Sidebar ---
-    st.markdown("---")
-    st.info("Desenvolvido por @Rogerio Souza")
+    st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Funções da Página ---
 @st.cache_data(ttl=600)
@@ -55,8 +53,7 @@ st.markdown("Visão geral e em tempo real da saúde financeira dos seus recebime
 df_parcelas = carregar_dados_dashboard()
 
 if df_parcelas.empty:
-    st.info("Ainda não há dados de parcelas para exibir no dashboard.")
-    st.stop()
+    st.info("Ainda não há dados de parcelas para exibir no dashboard."); st.stop()
 
 df_parcelas['valor_parcela'] = pd.to_numeric(df_parcelas['valor_parcela'])
 df_parcelas['data_vencimento'] = pd.to_datetime(df_parcelas['data_vencimento'])
