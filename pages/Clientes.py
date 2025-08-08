@@ -5,8 +5,8 @@ from utils import check_auth, get_supabase_client
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Clientes", layout="wide", page_icon="👥")
+supabase = get_supabase_client() # Pega/cria a conexão e restaura a sessão
 check_auth("a área de Clientes")
-supabase = get_supabase_client() # Pega a conexão já autenticada da sessão
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -20,15 +20,15 @@ with st.sidebar:
             st.rerun()
     st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
-# --- Funções da Página ---
+# ... (O resto do código de Clientes permanece o mesmo)
 @st.cache_data(ttl=60)
-def carregar_clientes_ativos(_supabase_client):
-    response = _supabase_client.table('clientes').select('*').eq('ativo', True).order('nome').execute()
+def carregar_clientes_ativos():
+    response = supabase.table('clientes').select('*').eq('ativo', True).order('nome').execute()
     return pd.DataFrame(response.data)
 
 @st.cache_data(ttl=60)
-def carregar_clientes_arquivados(_supabase_client):
-    response = _supabase_client.rpc('get_clientes_arquivados').execute()
+def carregar_clientes_arquivados():
+    response = supabase.rpc('get_clientes_arquivados').execute()
     return pd.DataFrame(response.data)
 
 def cadastrar_cliente(nome, cpf_cnpj, telefone, email, obs):
@@ -52,18 +52,16 @@ def reativar_cliente(cliente_id):
     except Exception as e:
         st.error(f"Erro ao reativar cliente: {e}"); return False
 
-# --- Construção da Página ---
 st.image("https://placehold.co/1200x200/2337D9/FFFFFF?text=Gestão+de+Clientes", use_container_width=True)
 st.title("👥 Gestão de Clientes")
 st.markdown("Cadastre, visualize e gerencie todos os seus clientes.")
 
-# ... (O resto do código desta página continua exatamente o mesmo)
 tab_principal_1, tab_principal_2 = st.tabs(["📋 Gerenciar Clientes", "➕ Cadastrar Novo Cliente"])
 with tab_principal_1:
     tab_ativos, tab_arquivados = st.tabs(["Clientes Ativos", "Clientes Arquivados"])
     with tab_ativos:
         st.subheader("Clientes Ativos")
-        df_clientes_ativos = carregar_clientes_ativos(supabase)
+        df_clientes_ativos = carregar_clientes_ativos()
         if df_clientes_ativos.empty:
             st.info("Nenhum cliente ativo encontrado.")
         else:
@@ -82,7 +80,7 @@ with tab_principal_1:
                             st.cache_data.clear(); st.rerun()
     with tab_arquivados:
         st.subheader("Clientes Arquivados")
-        df_clientes_arquivados = carregar_clientes_arquivados(supabase)
+        df_clientes_arquivados = carregar_clientes_arquivados()
         if df_clientes_arquivados.empty:
             st.info("Nenhum cliente arquivado.")
         else:

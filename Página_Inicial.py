@@ -1,10 +1,11 @@
 # Página_Inicial.py
 import streamlit as st
 from supabase import create_client, Client
-from utils import get_supabase_client # Importa a nova função
+from utils import get_supabase_client # Importa a função atualizada
 
 st.set_page_config(page_title="Gestão de Clientes | Construtora", page_icon="🏗️", layout="centered")
 
+# A função get_supabase_client agora lida com a restauração da sessão
 supabase = get_supabase_client()
 
 # A verificação de login agora é mais simples
@@ -18,7 +19,6 @@ with st.sidebar:
         st.success(f"Logado como: {st.session_state.user_email}")
         if st.button("Logout", use_container_width=True):
             supabase.auth.sign_out()
-            # Limpa tudo da sessão para um logout completo
             for key in st.session_state.keys():
                 del st.session_state[key]
             st.rerun()
@@ -40,15 +40,14 @@ if not st.session_state.logged_in:
         if submitted:
             with st.spinner("Autenticando..."):
                 try:
-                    # Faz o login. A biblioteca supabase-py automaticamente
-                    # armazena o token de autenticação no objeto 'supabase'
                     user_session_obj = supabase.auth.sign_in_with_password({"email": email, "password": password})
-                    
-                    # Guarda as informações importantes na sessão do Streamlit
                     st.session_state.logged_in = True
                     st.session_state.user_email = user_session_obj.user.email
-                    st.session_state.supabase_client = supabase # Guarda a conexão autenticada
-                    
+                    # Armazena apenas os tokens da sessão para revalidação
+                    st.session_state.user_session = {
+                        "access_token": user_session_obj.session.access_token,
+                        "refresh_token": user_session_obj.session.refresh_token
+                    }
                     st.rerun() 
                 except Exception as e:
                     st.error("Falha no login. Verifique seu email e senha.")

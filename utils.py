@@ -3,23 +3,27 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
+# Esta função agora é responsável por criar um cliente Supabase e
+# restaurar a sessão de login, se ela existir.
 def get_supabase_client() -> Client:
-    """
-    Cria uma conexão na primeira vez ou retorna a conexão já autenticada
-    que está guardada na memória da sessão. Esta é a chave da solução.
-    """
-    if 'supabase_client' in st.session_state:
-        return st.session_state.supabase_client
-
-    try:
-        url = st.secrets["supabase_url"]
-        key = st.secrets["supabase_key"]
-        client = create_client(url, key)
-        st.session_state.supabase_client = client
-        return client
-    except Exception:
-        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets.")
-        st.stop()
+    url = st.secrets["supabase_url"]
+    key = st.secrets["supabase_key"]
+    client = create_client(url, key)
+    
+    # Se uma sessão de usuário estiver salva, restaura ela no cliente
+    if 'user_session' in st.session_state:
+        try:
+            client.auth.set_session(
+                st.session_state.user_session['access_token'],
+                st.session_state.user_session['refresh_token']
+            )
+        except Exception as e:
+            # Se o token expirar ou der erro, limpa a sessão
+            st.warning("Sua sessão expirou. Por favor, faça o login novamente.")
+            del st.session_state['user_session']
+            del st.session_state['logged_in']
+    
+    return client
 
 def check_auth(pagina: str = "esta página"):
     """Verifica se o usuário está logado. Se não, para a execução."""

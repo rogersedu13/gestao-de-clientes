@@ -5,8 +5,8 @@ from utils import check_auth, get_supabase_client, formatar_moeda
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Dashboard", layout="wide", page_icon="📊")
+supabase = get_supabase_client() # Pega/cria a conexão e restaura a sessão
 check_auth("o Dashboard")
-supabase = get_supabase_client() # Pega a conexão já autenticada da sessão
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -20,22 +20,19 @@ with st.sidebar:
             st.rerun()
     st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
-# --- Funções da Página ---
+# O resto do código do Dashboard permanece o mesmo
+# ... (cole o resto do seu código do dashboard aqui, se tiver feito alterações)
 @st.cache_data(ttl=600)
-def carregar_dados_dashboard(_supabase_client):
-    parcelas_response = _supabase_client.table('parcelas').select('*, clientes(nome)').execute()
+def carregar_dados_dashboard():
+    parcelas_response = supabase.table('parcelas').select('*, clientes(nome)').execute()
     return pd.DataFrame(parcelas_response.data)
 
-# --- Construção da Página ---
 st.title("📊 Painel de Controle")
 st.markdown("Visão geral e em tempo real da saúde financeira dos seus recebimentos.")
-
-df_parcelas = carregar_dados_dashboard(supabase)
-
+df_parcelas = carregar_dados_dashboard()
 if df_parcelas.empty:
     st.info("Ainda não há dados de parcelas para exibir no dashboard."); st.stop()
 
-# (O resto do código desta página continua exatamente o mesmo)
 df_parcelas['valor_parcela'] = pd.to_numeric(df_parcelas['valor_parcela'])
 df_parcelas['data_vencimento'] = pd.to_datetime(df_parcelas['data_vencimento'])
 

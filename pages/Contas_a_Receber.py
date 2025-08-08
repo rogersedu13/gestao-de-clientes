@@ -7,34 +7,17 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import re
+from utils import check_auth, get_supabase_client, formatar_moeda
 
-# --- Funções de Utilidade Essenciais ---
-def conectar_supabase() -> Client:
-    try:
-        url = st.secrets["supabase_url"]; key = st.secrets["supabase_key"]
-        return create_client(url, key)
-    except Exception:
-        st.error("🚨 **Erro de Conexão:** Verifique as credenciais do Supabase nos Secrets."); st.stop()
-
-def check_auth(pagina: str = "esta página"):
-    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-        st.warning(f"🔒 Por favor, faça o login para acessar {pagina}."); st.stop()
-
-def formatar_moeda(valor):
-    if valor is None: return "R$ 0,00"
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
+# --- Funções de Utilidade ---
 def sanitizar_nome_arquivo(nome_arquivo: str) -> str:
     nome_limpo = re.sub(r'[^\w\.\-]', '_', nome_arquivo)
     return nome_limpo
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Contas a Receber", layout="wide", page_icon="💸")
+supabase = get_supabase_client() # Pega/cria a conexão e restaura a sessão
 check_auth("a área de Contas a Receber")
-supabase = create_client(st.secrets["supabase_url"], st.secrets["supabase_key"])
-
-if 'user_session' in st.session_state:
-    supabase.auth.set_session(st.session_state.user_session['access_token'], st.session_state.user_session['refresh_token'])
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -46,9 +29,7 @@ with st.sidebar:
             for key in st.session_state.keys():
                 del st.session_state[key]
             st.rerun()
-    
-    st.markdown("---")
-    st.info("Desenvolvido por @Rogerio Souza")
+    st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Funções de Cache ---
 @st.cache_data(ttl=60)
@@ -56,39 +37,25 @@ def carregar_clientes():
     response = supabase.table('clientes').select('id, nome').eq('ativo', True).order('nome').execute()
     return pd.DataFrame(response.data)
 
+# ... (O resto do código desta página permanece o mesmo)
 @st.cache_data(ttl=60)
 def carregar_debitos():
-    # <<<<===== AQUI ESTÁ A CORREÇÃO PARA O STATUS "ATRASADO" =====>>>>
-    # Chama a função para atualizar os status antes de carregar os dados
-    try:
-        supabase.rpc('atualizar_status_parcelas').execute()
-    except Exception as e:
-        st.warning(f"Não foi possível atualizar o status das parcelas: {e}")
-        
     response = supabase.table('debitos').select('*, clientes(nome)').execute()
     return pd.DataFrame(response.data)
-
 @st.cache_data(ttl=10)
 def carregar_parcelas(debito_id):
     if not debito_id: return pd.DataFrame()
     response = supabase.table('parcelas').select('*').eq('debito_id', debito_id).order('numero_parcela').execute()
     return pd.DataFrame(response.data)
-
-# --- Funções de Lógica ---
 def cadastrar_debito(cliente_id, descricao, valor_total, n_parcelas, data_inicio, frequencia, forma_pagamento, obs):
     try:
-        debito_data = {
-            'cliente_id': cliente_id, 'descricao': descricao, 'valor_total': valor_total,
-            'n_parcelas': n_parcelas, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),
-            'frequencia': frequencia, 'forma_pagamento': forma_pagamento, 'observacoes': obs
-        }
+        debito_data = {'cliente_id': cliente_id, 'descricao': descricao, 'valor_total': valor_total,'n_parcelas': n_parcelas, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),'frequencia': frequencia, 'forma_pagamento': forma_pagamento, 'observacoes': obs}
         response = supabase.table('debitos').insert(debito_data, count='exact').execute()
         novo_debito_id = response.data[0]['id']
         supabase.rpc('gerar_parcelas', {'debito_id_param': novo_debito_id}).execute()
         return True
     except Exception as e:
         st.error(f"Erro ao cadastrar débito: {e}"); return False
-
 def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
     try:
         url_comprovante = None
@@ -104,15 +71,11 @@ def registrar_pagamento(parcela_id, data_pagamento, comprovante_file):
             supabase.storage.from_("comprovantes").upload(file=comprovante_file.getvalue(), path=file_path, file_options={"content-type": comprovante_file.type})
             url_comprovante = supabase.storage.from_('comprovantes').get_public_url(file_path)
         
-        update_data = {
-            'status': 'Pago', 'data_pagamento': data_pagamento.strftime('%Y-%m-%d'),
-            'comprovante_url': url_comprovante
-        }
+        update_data = {'status': 'Pago', 'data_pagamento': data_pagamento.strftime('%Y-%m-%d'),'comprovante_url': url_comprovante}
         supabase.table('parcelas').update(update_data).eq('id', parcela_id).execute()
         return True
     except Exception as e:
         st.error(f"Erro ao registrar pagamento: {e}"); return False
-        
 def atualizar_comprovante(parcela_id, comprovante_file):
     try:
         if not comprovante_file:
@@ -136,7 +99,6 @@ def atualizar_comprovante(parcela_id, comprovante_file):
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar o comprovante: {e}"); return False
-
 def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
@@ -152,18 +114,15 @@ def gerar_recibo_pdf(parcela, cliente_nome, debito_desc):
     p.showPage(); p.save(); buffer.seek(0)
     return buffer
 
-# --- Construção da Página ---
 st.image("https://placehold.co/1200x200/529e67/FFFFFF?text=Contas+a+Receber", use_container_width=True)
 st.title("💸 Contas a Receber")
 st.markdown("Gerencie os débitos de clientes e controle o recebimento das parcelas.")
-
 df_clientes = carregar_clientes()
 if df_clientes.empty:
     st.warning("Nenhum cliente ativo cadastrado. Verifique a aba 'Clientes'."); st.stop()
 clientes_dict = pd.Series(df_clientes.id.values, index=df_clientes.nome).to_dict()
 
 tab1, tab2 = st.tabs(["🗂️ Visualizar Débitos e Parcelas", "➕ Lançar Novo Débito"])
-
 with tab1:
     st.subheader("Débitos Ativos")
     df_debitos = carregar_debitos()
@@ -217,7 +176,6 @@ with tab1:
                                 if st.form_submit_button("Confirmar", type="primary"):
                                     if registrar_pagamento(parcela['id'], data_pgto, comprovante):
                                         st.success("Recebimento registrado!"); st.cache_data.clear(); st.rerun()
-
 with tab2:
     st.subheader("Lançar Novo Débito para um Cliente")
     with st.form("novo_debito_form", clear_on_submit=True):
