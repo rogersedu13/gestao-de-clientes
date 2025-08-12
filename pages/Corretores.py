@@ -50,14 +50,41 @@ with st.sidebar:
 
 # --- Funções Específicas da Página ---
 @st.cache_data(ttl=60)
-def carregar_corretores():
+def carregar_corretores_ativos():
     response = supabase.table('corretores').select('*').eq('ativo', True).order('nome').execute()
+    return pd.DataFrame(response.data)
+
+@st.cache_data(ttl=60)
+def carregar_corretores_arquivados():
+    response = supabase.table('corretores').select('*').eq('ativo', False).order('nome').execute()
     return pd.DataFrame(response.data)
 
 @st.cache_data(ttl=60)
 def carregar_comissoes():
     response = supabase.table('comissoes').select('*, corretores(nome)').order('criado_em', desc=True).execute()
     return pd.DataFrame(response.data)
+
+def cadastrar_corretor(nome, cpf, creci, telefone, email):
+    try:
+        supabase.table('corretores').insert({
+            'nome': nome, 'cpf': cpf, 'creci': creci, 
+            'telefone': telefone, 'email': email
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao cadastrar corretor: {e}"); return False
+
+def arquivar_corretor(corretor_id):
+    try:
+        supabase.rpc('arquivar_corretor', {'p_corretor_id': corretor_id}).execute(); return True
+    except Exception as e:
+        st.error(f"Erro ao arquivar corretor: {e}"); return False
+
+def reativar_corretor(corretor_id):
+    try:
+        supabase.rpc('reativar_corretor', {'p_corretor_id': corretor_id}).execute(); return True
+    except Exception as e:
+        st.error(f"Erro ao reativar corretor: {e}"); return False
 
 def gerar_recibo_comissao_pdf(comissao, corretor_nome):
     buffer = BytesIO()
@@ -75,18 +102,19 @@ def gerar_recibo_comissao_pdf(comissao, corretor_nome):
     return buffer
 
 # --- Construção da Página ---
+st.image("https://placehold.co/1200x200/6f42c1/FFFFFF?text=Gestão+de+Corretores", use_container_width=True)
 st.title("🤝 Gestão de Corretores e Comissões")
 
 tab_comissoes, tab_gerenciar_corretores = st.tabs([" Lançar e Visualizar Comissões", " Cadastrar e Gerenciar Corretores"])
 
 with tab_comissoes:
     st.subheader("Lançar Nova Comissão")
-    df_corretores = carregar_corretores()
+    df_corretores_ativos = carregar_corretores_ativos()
 
-    if df_corretores.empty:
+    if df_corretores_ativos.empty:
         st.warning("Nenhum corretor ativo cadastrado. Cadastre um corretor na aba 'Cadastrar e Gerenciar Corretores' para começar.")
     else:
-        corretores_dict = pd.Series(df_corretores.id.values, index=df_corretores.nome).to_dict()
+        corretores_dict = pd.Series(df_corretores_ativos.id.values, index=df_corretores_ativos.nome).to_dict()
         with st.form("nova_comissao_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -122,7 +150,7 @@ with tab_comissoes:
     if df_comissoes.empty:
         st.info("Nenhuma comissão foi lançada ainda.")
     else:
-        df_comissoes['nome_corretor'] = df_comissoes['corretores'].apply(lambda x: x['nome'] if isinstance(x, dict) else 'N/A')
+        df_comissoes['nome_corretor'] = df_comissoes['corretores'].apply(lambda x: x['nome'] if isinstance(x, dict) else 'Corretor não encontrado')
         
         filtro_status = st.selectbox("Filtrar por Status:", ["Todas", "Pendente", "Paga"])
         df_filtrado = df_comissoes
@@ -164,5 +192,50 @@ with tab_comissoes:
                                     st.error(f"Erro ao registrar pagamento: {e}")
 
 with tab_gerenciar_corretores:
-    st.info("Funcionalidade de arquivar e reativar corretores será adicionada em uma próxima versão.")
-    # A lógica de CRUD de corretores pode ser adicionada aqui, similar à página de Clientes.
+    st.subheader("Gerenciar Cadastro de Corretores")
+    
+    # Abas internas para Ativos e Arquivados
+    tab_ativos, tab_arquivados = st.tabs(["Corretores Ativos", "Corretores Arquivados"])
+    
+    with tab_ativos:
+        df_corretores_ativos = carregar_corretores_ativos()
+        st.markdown(f"**Total de corretores ativos:** {len(df_corretores_ativos)}")
+        for _, row in df_corretores_ativos.iterrows():
+            with st.expander(f"{row['nome']}"):
+                st.write(f"**CPF:** {row.get('cpf', 'N/A')}")
+                st.write(f"**CRECI:** {row.get('creci', 'N/A')}")
+                st.write(f"**Email:** {row.get('email', 'N/A')}")
+                st.write(f"**Telefone:** {row.get('telefone', 'N/A')}")
+                if st.button("Arquivar Corretor", key=f"arquivar_{row['id']}", type="secondary"):
+                    arquivar_corretor(row['id'])
+                    st.success(f"Corretor '{row['nome']}' arquivado.")
+                    st.cache_data.clear(); st.rerun()
+    
+    with tab_arquivados:
+        df_corretores_arquivados = carregar_corretores_arquivados()
+        st.markdown(f"**Total de corretores arquivados:** {len(df_corretores_arquivados)}")
+        for _, row in df_corretores_arquivados.iterrows():
+            with st.expander(f"{row['nome']}"):
+                st.write(f"**CPF:** {row.get('cpf', 'N/A')}")
+                st.write(f"**CRECI:** {row.get('creci', 'N/A')}")
+                if st.button("Reativar Corretor", key=f"reativar_{row['id']}", type="primary"):
+                    reativar_corretor(row['id'])
+                    st.success(f"Corretor '{row['nome']}' reativado.")
+                    st.cache_data.clear(); st.rerun()
+
+    st.markdown("---")
+    with st.form("novo_corretor_form", clear_on_submit=True):
+        st.subheader("Cadastrar Novo Corretor")
+        c1, c2 = st.columns(2)
+        nome = c1.text_input("Nome Completo*")
+        cpf = c2.text_input("CPF")
+        creci = c1.text_input("CRECI")
+        telefone = c2.text_input("Telefone")
+        email = c1.text_input("Email")
+        if st.form_submit_button("Salvar Novo Corretor", use_container_width=True, type="primary"):
+            if not nome:
+                st.error("O campo 'Nome Completo' é obrigatório.")
+            else:
+                if cadastrar_corretor(nome, cpf, creci, telefone, email):
+                    st.success("Corretor cadastrado com sucesso!")
+                    st.cache_data.clear()
