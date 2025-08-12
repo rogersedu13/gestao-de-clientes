@@ -28,38 +28,20 @@ def carregar_obras(_supabase_client: Client) -> pd.DataFrame:
     response = _supabase_client.table('obras').select('*').eq('ativo', True).order('nome_obra').execute()
     return pd.DataFrame(response.data)
 
-# <<<<===== FUNÇÃO CORRIGIDA COM LÓGICA ROBUSTA =====>>>>
 @st.cache_data(ttl=60)
 def carregar_receitas_por_obra(_supabase_client: Client) -> pd.Series:
-    # 1. Pega todos os débitos, sem filtro complexo
-    response = _supabase_client.table('debitos').select('obra_id, valor_total').execute()
+    response = _supabase_client.table('debitos').select('obra_id, valor_total').not_('obra_id', 'is', None).execute()
     df = pd.DataFrame(response.data)
-    
-    # 2. Se estiver vazio, retorna
     if df.empty: return pd.Series(dtype='float64')
-
-    # 3. Descarta as linhas sem obra_id e converte para número
-    df = df.dropna(subset=['obra_id'])
     df['valor_total'] = pd.to_numeric(df['valor_total'], errors='coerce').fillna(0)
-    
-    # 4. Agrupa e soma com segurança
     return df.groupby('obra_id')['valor_total'].sum()
 
-# <<<<===== FUNÇÃO CORRIGIDA COM LÓGICA ROBUSTA =====>>>>
 @st.cache_data(ttl=60)
 def carregar_custos_por_obra(_supabase_client: Client) -> pd.Series:
-    # 1. Pega todas as contas, sem filtro complexo
-    response = _supabase_client.table('contas_a_pagar').select('obra_id, valor').execute()
+    response = _supabase_client.table('contas_a_pagar').select('obra_id, valor').not_('obra_id', 'is', None).execute()
     df = pd.DataFrame(response.data)
-
-    # 2. Se estiver vazio, retorna
     if df.empty: return pd.Series(dtype='float64')
-
-    # 3. Descarta as linhas sem obra_id e converte para número
-    df = df.dropna(subset=['obra_id'])
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0)
-
-    # 4. Agrupa e soma com segurança
     return df.groupby('obra_id')['valor'].sum()
 
 def cadastrar_obra(nome, endereco, data_inicio, data_fim, status, valor, responsavel, obs):
@@ -87,16 +69,30 @@ with tab_painel:
     df_receitas = carregar_receitas_por_obra(supabase)
     df_custos = carregar_custos_por_obra(supabase)
 
+    # Junta as receitas com os dados das obras
     if not df_receitas.empty:
         df_obras = df_obras.merge(df_receitas.rename('receita_total'), left_on='id', right_index=True, how='left')
-    df_obras['receita_total'] = df_obras.get('receita_total', 0).fillna(0)
     
+    # Junta os custos
     if not df_custos.empty:
         df_obras = df_obras.merge(df_custos.rename('custo_total'), left_on='id', right_index=True, how='left')
-    df_obras['custo_total'] = df_obras.get('custo_total', 0).fillna(0)
     
+    # <<<<===== CORREÇÃO APLICADA AQUI =====>>>>
+    # Garante que as colunas existam e preenche valores nulos com 0
+    if 'receita_total' not in df_obras.columns:
+        df_obras['receita_total'] = 0
+    else:
+        df_obras['receita_total'] = df_obras['receita_total'].fillna(0)
+        
+    if 'custo_total' not in df_obras.columns:
+        df_obras['custo_total'] = 0
+    else:
+        df_obras['custo_total'] = df_obras['custo_total'].fillna(0)
+
+    # Calcula a lucratividade
     df_obras['lucratividade'] = df_obras['receita_total'] - df_obras['custo_total']
 
+    # Indicadores Rápidos
     col1, col2 = st.columns(2)
     if 'status' in df_obras.columns:
         obras_em_andamento = df_obras[df_obras['status'] == 'Em Andamento'].shape[0]
