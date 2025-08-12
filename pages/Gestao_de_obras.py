@@ -1,4 +1,4 @@
-# pages/Gestao_de_obras.py
+# pages/Gestao_de_Obras.py
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
@@ -28,20 +28,46 @@ def carregar_obras(_supabase_client: Client) -> pd.DataFrame:
     response = _supabase_client.table('obras').select('*').eq('ativo', True).order('nome_obra').execute()
     return pd.DataFrame(response.data)
 
+# <<<<===== FUNÇÃO CORRIGIDA COM LÓGICA ROBUSTA =====>>>>
 @st.cache_data(ttl=60)
 def carregar_receitas_por_obra(_supabase_client: Client) -> pd.Series:
-    response = _supabase_client.table('debitos').select('obra_id, valor_total').not_('obra_id', 'is', None).execute()
+    # 1. Pega todos os débitos, sem o filtro complexo que causa o erro
+    response = _supabase_client.table('debitos').select('obra_id, valor_total').execute()
     df = pd.DataFrame(response.data)
-    if df.empty: return pd.Series(dtype='float64')
+    
+    # 2. Retorna vazio se não houver dados
+    if df.empty:
+        return pd.Series(dtype='float64')
+
+    # 3. Filtra no Pandas: descarta as linhas sem obra_id
+    df = df.dropna(subset=['obra_id'])
+    if df.empty:
+        return pd.Series(dtype='float64')
+        
     df['valor_total'] = pd.to_numeric(df['valor_total'], errors='coerce').fillna(0)
+    
+    # 4. Agrupa e soma com segurança
     return df.groupby('obra_id')['valor_total'].sum()
 
+# <<<<===== FUNÇÃO CORRIGIDA COM LÓGICA ROBUSTA =====>>>>
 @st.cache_data(ttl=60)
 def carregar_custos_por_obra(_supabase_client: Client) -> pd.Series:
-    response = _supabase_client.table('contas_a_pagar').select('obra_id, valor').not_('obra_id', 'is', None).execute()
+    # 1. Pega todas as contas, sem o filtro complexo
+    response = _supabase_client.table('contas_a_pagar').select('obra_id, valor').execute()
     df = pd.DataFrame(response.data)
-    if df.empty: return pd.Series(dtype='float64')
+
+    # 2. Retorna vazio se não houver dados
+    if df.empty:
+        return pd.Series(dtype='float64')
+
+    # 3. Filtra no Pandas: descarta as linhas sem obra_id
+    df = df.dropna(subset=['obra_id'])
+    if df.empty:
+        return pd.Series(dtype='float64')
+
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0)
+
+    # 4. Agrupa e soma com segurança
     return df.groupby('obra_id')['valor'].sum()
 
 def cadastrar_obra(nome, endereco, data_inicio, data_fim, status, valor, responsavel, obs):
@@ -69,28 +95,16 @@ with tab_painel:
     df_receitas = carregar_receitas_por_obra(supabase)
     df_custos = carregar_custos_por_obra(supabase)
 
-    # <<<<===== AQUI ESTÁ A CORREÇÃO =====>>>>
-    # Esta é a forma correta e segura de juntar os dados e tratar valores nulos
-    
-    # Junta as receitas com os dados das obras
+    # Junta as receitas
     if not df_receitas.empty:
         df_obras = df_obras.merge(df_receitas.rename('receita_total'), left_on='id', right_index=True, how='left')
+    df_obras['receita_total'] = df_obras.get('receita_total', 0).fillna(0)
     
     # Junta os custos
     if not df_custos.empty:
         df_obras = df_obras.merge(df_custos.rename('custo_total'), left_on='id', right_index=True, how='left')
+    df_obras['custo_total'] = df_obras.get('custo_total', 0).fillna(0)
     
-    # Garante que as colunas existam e preenche valores nulos (NaN) com 0
-    if 'receita_total' not in df_obras.columns:
-        df_obras['receita_total'] = 0.0
-    df_obras['receita_total'] = df_obras['receita_total'].fillna(0)
-        
-    if 'custo_total' not in df_obras.columns:
-        df_obras['custo_total'] = 0.0
-    df_obras['custo_total'] = df_obras['custo_total'].fillna(0)
-    
-    # <<<<===== FIM DA CORREÇÃO =====>>>>
-
     # Calcula a lucratividade
     df_obras['lucratividade'] = df_obras['receita_total'] - df_obras['custo_total']
 
@@ -99,8 +113,6 @@ with tab_painel:
     if 'status' in df_obras.columns:
         obras_em_andamento = df_obras[df_obras['status'] == 'Em Andamento'].shape[0]
         col1.metric("Obras em Andamento", obras_em_andamento)
-    else:
-        col1.metric("Obras em Andamento", "N/A", help="Coluna 'status' não encontrada.")
     
     lucratividade_total = df_obras['lucratividade'].sum()
     col2.metric("Lucratividade Total Prevista", formatar_moeda(lucratividade_total))
