@@ -3,7 +3,7 @@ import streamlit as st
 from supabase import create_client, Client
 from utils import get_supabase_client # Importa a função atualizada
 
-st.set_page_config(page_title="Gestão de Clientes | Construtora", page_icon="🏗️", layout="centered")
+st.set_page_config(page_title="Sistema de Gestão", page_icon="🏗️", layout="centered")
 
 # A função get_supabase_client agora lida com a restauração da sessão
 supabase = get_supabase_client()
@@ -28,8 +28,8 @@ with st.sidebar:
     st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Tela de Login ---
-st.title("🏗️ Sistema de Gestão de Clientes")
-st.header("Acesso ao Painel da Construtora")
+st.title("🏗️ Sistema de Gestão")
+st.header("Acesso ao Painel Principal")
 
 if not st.session_state.logged_in:
     with st.form("login_form"):
