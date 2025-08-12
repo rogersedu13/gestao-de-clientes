@@ -94,7 +94,7 @@ st.image("https://placehold.co/1200x200/17a2b8/FFFFFF?text=Relatórios+Financeir
 st.title("📈 Relatórios Financeiros")
 # O título de texto simples foi removido e substituído pela imagem acima
 
-st.markdown("Analise o passado, presente e futuro financeiro da sua construtora.")
+st.markdown("Analise completa de contas a pagar e receber.")
 
 df_receber_raw, df_pagar_raw = carregar_todos_dados_financeiros(supabase)
 
