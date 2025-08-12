@@ -1,4 +1,4 @@
-# pages/Relatorios_Financeiros.py
+# pages/1_Relatorios_Financeiros.py
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
@@ -26,11 +26,8 @@ with st.sidebar:
     st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Funções da Página ---
-
-# <<<<===== AQUI ESTÁ A CORREÇÃO PARA FORÇAR A ATUALIZAÇÃO DO CACHE =====>>>>
-# Adicionamos um argumento 'v' com um valor diferente para invalidar o cache antigo.
 @st.cache_data(ttl=300)
-def carregar_todos_dados_financeiros(_supabase_client: Client, v=2):
+def carregar_todos_dados_financeiros(_supabase_client: Client):
     """Carrega todas as transações (a pagar e a receber) de uma vez."""
     parcelas_resp = _supabase_client.table('parcelas').select('*, clientes(nome)').execute()
     contas_resp = _supabase_client.table('contas_a_pagar').select('*, fornecedores(nome_razao_social)').execute()
@@ -91,10 +88,14 @@ def gerar_extrato_cliente_pdf(df_extrato: pd.DataFrame, cliente_nome: str, totai
     return buffer
 
 # --- Construção da Página ---
+
+# <<<<===== AQUI ESTÁ A MUDANÇA =====>>>>
+st.image("https://placehold.co/1200x200/17a2b8/FFFFFF?text=Relatórios+Financeiros", use_container_width=True)
 st.title("📈 Relatórios Financeiros")
+# O título de texto simples foi removido e substituído pela imagem acima
+
 st.markdown("Analise o passado, presente e futuro financeiro da sua construtora.")
 
-# Chama a função com a nova assinatura para forçar a atualização
 df_receber_raw, df_pagar_raw = carregar_todos_dados_financeiros(supabase)
 
 tab_painel, tab_fluxo, tab_extrato = st.tabs(["Painel de Controle", "📊 Fluxo de Caixa Realizado", "📄 Extrato por Cliente"])
@@ -103,7 +104,6 @@ with tab_painel:
     st.subheader("Resumo Financeiro Instantâneo")
     col1, col2, col3, col4 = st.columns(4)
     
-    # Adicionando verificações de segurança para evitar o erro
     if not df_receber_raw.empty and 'status' in df_receber_raw.columns:
         total_a_receber = pd.to_numeric(df_receber_raw[df_receber_raw['status'].isin(['Pendente', 'Atrasado'])]['valor_parcela'], errors='coerce').sum()
         total_atrasado = pd.to_numeric(df_receber_raw[df_receber_raw['status'] == 'Atrasado']['valor_parcela'], errors='coerce').sum()
@@ -139,7 +139,6 @@ with tab_fluxo:
     if data_inicio > data_fim:
         st.error("A data de início não pode ser posterior à data de fim.")
     else:
-        # Filtra os DataFrames pelo período selecionado
         df_receber_periodo = pd.DataFrame()
         if not df_receber_raw.empty and 'data_pagamento' in df_receber_raw.columns:
              df_receber_periodo = df_receber_raw.dropna(subset=['data_pagamento'])
@@ -162,7 +161,6 @@ with tab_fluxo:
         c2.metric("Total Pago no Período", formatar_moeda(total_pago_periodo))
         c3.metric("Saldo do Período", formatar_moeda(saldo_periodo))
         
-        # Prepara dados para o gráfico
         if not df_receber_periodo.empty:
             df_receber_periodo['data'] = pd.to_datetime(df_receber_periodo['data_pagamento'])
             receitas_mensais = df_receber_periodo.set_index('data').resample('M')['valor_parcela'].sum()
@@ -182,7 +180,6 @@ with tab_fluxo:
             st.bar_chart(df_fluxo_caixa)
         else:
             st.info("Nenhum dado financeiro no período selecionado para exibir o gráfico.")
-
 
 with tab_extrato:
     st.subheader("Extrato Financeiro por Cliente")
@@ -227,4 +224,9 @@ with tab_extrato:
 
                 totais = {"total_debitos": formatar_moeda(total_debitos), "total_pago": formatar_moeda(total_pago), "saldo_devedor": formatar_moeda(saldo_devedor)}
                 pdf_bytes = gerar_extrato_cliente_pdf(df_display, cliente_selecionado_nome, totais)
-                st.download_button(label="📄 Gerar Extrato em PDF", data=pdf_bytes, file_name=f"extrato_{cliente_selecionado_nome.replace(' ', '_')}.pdf", mime="application/pdf")
+                st.download_button(
+                    label="📄 Gerar Extrato em PDF",
+                    data=pdf_bytes,
+                    file_name=f"extrato_{cliente_selecionado_nome.replace(' ', '_')}.pdf",
+                    mime="application/pdf"
+                )
