@@ -77,7 +77,7 @@ if not st.session_state.logged_in:
 else:
     # <<<<===== AQUI ESTÁ A CORREÇÃO =====>>>>
     # Se já estiver logado, a página inicial mostra esta mensagem e imagem
-    st.title(f"Bem-vindo(a) de volta, {st.session_state.user_email.split('@')[0]}!")
+    st.title(f"Bem-vindo de volta!")
     st.markdown("---")
     st.info("👈 Use o menu na barra lateral para navegar entre as seções do sistema.")
     st.image("https://images.unsplash.com/photo-1581092446347-a70c323f412c?q=80&w=2070&auto=format&fit=crop",
