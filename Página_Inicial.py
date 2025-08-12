@@ -2,9 +2,10 @@
 import streamlit as st
 from supabase import create_client, Client
 from utils import get_supabase_client
+from datetime import timedelta
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="Sistema de Gestão", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Gestão de Gestão", page_icon="🏗️", layout="wide")
 
 # --- Conexão e Autenticação ---
 supabase = get_supabase_client()
@@ -40,13 +41,14 @@ with st.sidebar:
 
 if not st.session_state.logged_in:
     
-    # --- NOVO LAYOUT VERTICAL DA TELA DE LOGIN ---
+    # --- LAYOUT VERTICAL DA TELA DE LOGIN ---
     
     st.markdown("<br>", unsafe_allow_html=True) 
 
-    # Textos de boas-vindas centralizados
-    st.title("Sistema de Gestão", anchor=False)
-    st.write("Gestão de Clientes, Obras e Finanças.")
+    # <<<<===== AQUI ESTÁ A MUDANÇA =====>>>>
+    # Textos de boas-vindas centralizados usando st.markdown
+    st.markdown("<h1 style='text-align: center;'>Sistema de Gestão</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #808080;'>Gestão de Clientes, Obras e Finanças.</h3>", unsafe_allow_html=True)
     st.markdown("---")
     
     # Centraliza o formulário de login usando colunas
