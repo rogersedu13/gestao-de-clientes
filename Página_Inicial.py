@@ -5,7 +5,7 @@ from utils import get_supabase_client
 from datetime import timedelta
 
 # --- Configuração da Página ---
-st.set_page_config(page_title="Gestão de Gestão", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Sistema de Gestão", page_icon="🏗️", layout="wide")
 
 # --- Conexão e Autenticação ---
 supabase = get_supabase_client()
@@ -45,8 +45,7 @@ if not st.session_state.logged_in:
     
     st.markdown("<br>", unsafe_allow_html=True) 
 
-    # <<<<===== AQUI ESTÁ A MUDANÇA =====>>>>
-    # Textos de boas-vindas centralizados usando st.markdown
+    # Textos de boas-vindas centralizados
     st.markdown("<h1 style='text-align: center;'>Sistema de Gestão</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #808080;'>Gestão de Clientes, Obras e Finanças.</h3>", unsafe_allow_html=True)
     st.markdown("---")
@@ -76,10 +75,11 @@ if not st.session_state.logged_in:
                         except Exception as e:
                             st.error("Falha no login. Verifique seu email e senha.")
 else:
-    # Se já estiver logado, a página inicial mostra uma mensagem simples
+    # <<<<===== AQUI ESTÁ A CORREÇÃO =====>>>>
+    # Se já estiver logado, a página inicial mostra esta mensagem e imagem
     st.title(f"Bem-vindo(a) de volta, {st.session_state.user_email.split('@')[0]}!")
     st.markdown("---")
     st.info("👈 Use o menu na barra lateral para navegar entre as seções do sistema.")
     st.image("https://images.unsplash.com/photo-1581092446347-a70c323f412c?q=80&w=2070&auto=format&fit=crop",
-             caption="Gestão de Clientes, Obras e Finanças.",
+             caption="Gestão de Clientes, Obras e Finanças..",
              use_container_width=True)
