@@ -105,8 +105,61 @@ def gerar_recibo_comissao_pdf(comissao, corretor_nome):
 st.image("https://placehold.co/1200x200/6f42c1/FFFFFF?text=Gestão+de+Corretores", use_container_width=True)
 st.title("🤝 Gestão de Corretores e Comissões")
 
-tab_comissoes, tab_gerenciar_corretores = st.tabs([" Lançar e Visualizar Comissões", " Cadastrar e Gerenciar Corretores"])
+# <<<<===== AQUI ESTÁ A MUDANÇA =====>>>>
+# Invertemos a ordem das abas e das variáveis
+tab_gerenciar_corretores, tab_comissoes = st.tabs([" Cadastrar e Gerenciar Corretores", " Lançar e Visualizar Comissões"])
 
+# O bloco de código de gerenciar corretores agora vem primeiro
+with tab_gerenciar_corretores:
+    st.subheader("Gerenciar Cadastro de Corretores")
+    
+    # Abas internas para Ativos e Arquivados
+    tab_ativos, tab_arquivados = st.tabs(["Corretores Ativos", "Corretores Arquivados"])
+    
+    with tab_ativos:
+        df_corretores_ativos = carregar_corretores_ativos()
+        st.markdown(f"**Total de corretores ativos:** {len(df_corretores_ativos)}")
+        for _, row in df_corretores_ativos.iterrows():
+            with st.expander(f"{row['nome']}"):
+                st.write(f"**CPF:** {row.get('cpf', 'N/A')}")
+                st.write(f"**CRECI:** {row.get('creci', 'N/A')}")
+                st.write(f"**Email:** {row.get('email', 'N/A')}")
+                st.write(f"**Telefone:** {row.get('telefone', 'N/A')}")
+                if st.button("Arquivar Corretor", key=f"arquivar_{row['id']}", type="secondary"):
+                    arquivar_corretor(row['id'])
+                    st.success(f"Corretor '{row['nome']}' arquivado.")
+                    st.cache_data.clear(); st.rerun()
+    
+    with tab_arquivados:
+        df_corretores_arquivados = carregar_corretores_arquivados()
+        st.markdown(f"**Total de corretores arquivados:** {len(df_corretores_arquivados)}")
+        for _, row in df_corretores_arquivados.iterrows():
+            with st.expander(f"{row['nome']}"):
+                st.write(f"**CPF:** {row.get('cpf', 'N/A')}")
+                st.write(f"**CRECI:** {row.get('creci', 'N/A')}")
+                if st.button("Reativar Corretor", key=f"reativar_{row['id']}", type="primary"):
+                    reativar_corretor(row['id'])
+                    st.success(f"Corretor '{row['nome']}' reativado.")
+                    st.cache_data.clear(); st.rerun()
+
+    st.markdown("---")
+    with st.form("novo_corretor_form", clear_on_submit=True):
+        st.subheader("Cadastrar Novo Corretor")
+        c1, c2 = st.columns(2)
+        nome = c1.text_input("Nome Completo*")
+        cpf = c2.text_input("CPF")
+        creci = c1.text_input("CRECI")
+        telefone = c2.text_input("Telefone")
+        email = c1.text_input("Email")
+        if st.form_submit_button("Salvar Novo Corretor", use_container_width=True, type="primary"):
+            if not nome:
+                st.error("O campo 'Nome Completo' é obrigatório.")
+            else:
+                if cadastrar_corretor(nome, cpf, creci, telefone, email):
+                    st.success("Corretor cadastrado com sucesso!")
+                    st.cache_data.clear()
+
+# O bloco de código de comissões agora vem em segundo
 with tab_comissoes:
     st.subheader("Lançar Nova Comissão")
     df_corretores_ativos = carregar_corretores_ativos()
@@ -190,52 +243,3 @@ with tab_comissoes:
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao registrar pagamento: {e}")
-
-with tab_gerenciar_corretores:
-    st.subheader("Gerenciar Cadastro de Corretores")
-    
-    # Abas internas para Ativos e Arquivados
-    tab_ativos, tab_arquivados = st.tabs(["Corretores Ativos", "Corretores Arquivados"])
-    
-    with tab_ativos:
-        df_corretores_ativos = carregar_corretores_ativos()
-        st.markdown(f"**Total de corretores ativos:** {len(df_corretores_ativos)}")
-        for _, row in df_corretores_ativos.iterrows():
-            with st.expander(f"{row['nome']}"):
-                st.write(f"**CPF:** {row.get('cpf', 'N/A')}")
-                st.write(f"**CRECI:** {row.get('creci', 'N/A')}")
-                st.write(f"**Email:** {row.get('email', 'N/A')}")
-                st.write(f"**Telefone:** {row.get('telefone', 'N/A')}")
-                if st.button("Arquivar Corretor", key=f"arquivar_{row['id']}", type="secondary"):
-                    arquivar_corretor(row['id'])
-                    st.success(f"Corretor '{row['nome']}' arquivado.")
-                    st.cache_data.clear(); st.rerun()
-    
-    with tab_arquivados:
-        df_corretores_arquivados = carregar_corretores_arquivados()
-        st.markdown(f"**Total de corretores arquivados:** {len(df_corretores_arquivados)}")
-        for _, row in df_corretores_arquivados.iterrows():
-            with st.expander(f"{row['nome']}"):
-                st.write(f"**CPF:** {row.get('cpf', 'N/A')}")
-                st.write(f"**CRECI:** {row.get('creci', 'N/A')}")
-                if st.button("Reativar Corretor", key=f"reativar_{row['id']}", type="primary"):
-                    reativar_corretor(row['id'])
-                    st.success(f"Corretor '{row['nome']}' reativado.")
-                    st.cache_data.clear(); st.rerun()
-
-    st.markdown("---")
-    with st.form("novo_corretor_form", clear_on_submit=True):
-        st.subheader("Cadastrar Novo Corretor")
-        c1, c2 = st.columns(2)
-        nome = c1.text_input("Nome Completo*")
-        cpf = c2.text_input("CPF")
-        creci = c1.text_input("CRECI")
-        telefone = c2.text_input("Telefone")
-        email = c1.text_input("Email")
-        if st.form_submit_button("Salvar Novo Corretor", use_container_width=True, type="primary"):
-            if not nome:
-                st.error("O campo 'Nome Completo' é obrigatório.")
-            else:
-                if cadastrar_corretor(nome, cpf, creci, telefone, email):
-                    st.success("Corretor cadastrado com sucesso!")
-                    st.cache_data.clear()
