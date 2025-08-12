@@ -1,12 +1,13 @@
 # pages/1_Dashboard.py
 import streamlit as st
 import pandas as pd
+from datetime import timedelta
 from utils import check_auth, get_supabase_client, formatar_moeda
 
 # --- Autenticação e Conexão ---
 st.set_page_config(page_title="Dashboard", layout="wide", page_icon="📊")
-supabase = get_supabase_client() # Pega/cria a conexão e restaura a sessão
 check_auth("o Dashboard")
+supabase = get_supabase_client()
 
 # --- Lógica da Sidebar ---
 with st.sidebar:
@@ -20,58 +21,62 @@ with st.sidebar:
             st.rerun()
     st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
-# O resto do código do Dashboard permanece o mesmo
-# ... (cole o resto do seu código do dashboard aqui, se tiver feito alterações)
+# --- Funções da Página ---
 @st.cache_data(ttl=600)
 def carregar_dados_dashboard():
-    parcelas_response = supabase.table('parcelas').select('*, clientes(nome)').execute()
-    return pd.DataFrame(parcelas_response.data)
+    # Carrega tanto as parcelas a receber quanto as contas a pagar
+    parcelas_resp = supabase.table('parcelas').select('valor_parcela, status, data_pagamento, data_vencimento, clientes(nome)').execute()
+    contas_resp = supabase.table('contas_a_pagar').select('valor, status, data_pagamento, data_vencimento, fornecedores(nome_razao_social)').execute()
+    return pd.DataFrame(parcelas_resp.data), pd.DataFrame(contas_resp.data)
 
+# --- Construção da Página ---
 st.title("📊 Painel de Controle")
-st.markdown("Visão geral e em tempo real da saúde financeira dos seus recebimentos.")
-df_parcelas = carregar_dados_dashboard()
-if df_parcelas.empty:
-    st.info("Ainda não há dados de parcelas para exibir no dashboard."); st.stop()
+st.markdown("Visão geral e em tempo real da saúde financeira da sua construtora.")
 
-df_parcelas['valor_parcela'] = pd.to_numeric(df_parcelas['valor_parcela'])
-df_parcelas['data_vencimento'] = pd.to_datetime(df_parcelas['data_vencimento'])
+df_receber, df_pagar = carregar_dados_dashboard()
 
+# --- KPIs Principais ---
 st.markdown("### Resumo Financeiro")
-col1, col2, col3 = st.columns(3)
-total_a_receber = df_parcelas[df_parcelas['status'].isin(['Pendente', 'Atrasado'])]['valor_parcela'].sum()
+col1, col2, col3, col4 = st.columns(4)
+
+total_a_receber = pd.to_numeric(df_receber[df_receber['status'].isin(['Pendente', 'Atrasado'])]['valor_parcela']).sum()
 col1.metric("💰 Total a Receber", formatar_moeda(total_a_receber))
-recebido_mes_atual = df_parcelas[(df_parcelas['status'] == 'Pago') & (pd.to_datetime(df_parcelas['data_pagamento'], errors='coerce').dt.month == pd.Timestamp.now().month) & (pd.to_datetime(df_parcelas['data_pagamento'], errors='coerce').dt.year == pd.Timestamp.now().year)]['valor_parcela'].sum()
+
+recebido_mes_atual = pd.to_numeric(df_receber[(df_receber['status'] == 'Pago') & (pd.to_datetime(df_receber['data_pagamento'], errors='coerce').dt.month == pd.Timestamp.now().month)]['valor_parcela']).sum()
 col2.metric("✅ Recebido este Mês", formatar_moeda(recebido_mes_atual))
-total_atrasado = df_parcelas[df_parcelas['status'] == 'Atrasado']['valor_parcela'].sum()
-col3.metric("⚠️ Total em Atraso", formatar_moeda(total_atrasado), delta_color="inverse")
+
+total_a_pagar = pd.to_numeric(df_pagar[df_pagar['status'].isin(['Pendente', 'Atrasado'])]['valor']).sum()
+col3.metric("💸 Total a Pagar", formatar_moeda(total_a_pagar))
+
+total_atrasado = pd.to_numeric(df_receber[df_receber['status'] == 'Atrasado']['valor_parcela']).sum()
+col4.metric("⚠️ Recebimentos em Atraso", formatar_moeda(total_atrasado), delta_color="inverse")
 
 st.markdown("---")
-col_venc, col_atraso = st.columns(2)
-with col_venc:
-    st.markdown("### 🗓️ Próximos Vencimentos (7 dias)")
-    hoje = pd.Timestamp.now().normalize()
-    proximos_vencimentos = df_parcelas[(df_parcelas['data_vencimento'] >= hoje) & (df_parcelas['data_vencimento'] <= hoje + pd.Timedelta(days=7)) & (df_parcelas['status'] == 'Pendente')].sort_values('data_vencimento')
-    if proximos_vencimentos.empty:
-        st.success("Nenhuma parcela vencendo nos próximos 7 dias.")
-    else:
-        for _, row in proximos_vencimentos.iterrows():
-            nome_cliente = row['clientes']['nome'] if isinstance(row.get('clientes'), dict) else 'Cliente não encontrado'
-            st.warning(f"**{nome_cliente}**: {formatar_moeda(row['valor_parcela'])} - Vence em: {row['data_vencimento'].strftime('%d/%m/%Y')}")
-with col_atraso:
-    st.markdown("### 🚫 Parcelas em Atraso")
-    parcelas_atrasadas = df_parcelas[df_parcelas['status'] == 'Atrasado'].sort_values('data_vencimento')
-    if parcelas_atrasadas.empty:
-        st.success("Nenhuma parcela em atraso!")
-    else:
-        for _, row in parcelas_atrasadas.iterrows():
-            nome_cliente = row['clientes']['nome'] if isinstance(row.get('clientes'), dict) else 'Cliente não encontrado'
-            st.error(f"**{nome_cliente}**: {formatar_moeda(row['valor_parcela'])} - Venceu em: {row['data_vencimento'].strftime('%d/%m/%Y')}")
 
-st.markdown("---")
-st.markdown("### 📊 Saldo Devedor por Cliente (Top 10)")
-df_parcelas['nome_cliente'] = df_parcelas['clientes'].apply(lambda x: x['nome'] if isinstance(x, dict) and 'nome' in x else 'Desconhecido')
-top_10_devedores = df_parcelas[df_parcelas['status'] != 'Pago'].groupby('nome_cliente')['valor_parcela'].sum().nlargest(10)
-if not top_10_devedores.empty:
-    st.bar_chart(top_10_devedores)
+# --- Próximos Vencimentos e Parcelas Atrasadas ---
+st.markdown("### 🗓️ Vencimentos da Semana")
+hoje = pd.Timestamp.now().normalize()
+data_fim_semana = hoje + pd.Timedelta(days=7)
+
+# Prepara dados a receber
+df_receber['data_vencimento'] = pd.to_datetime(df_receber['data_vencimento'])
+venc_receber = df_receber[(df_receber['data_vencimento'] >= hoje) & (df_receber['data_vencimento'] <= data_fim_semana) & (df_receber['status'] == 'Pendente')]
+venc_receber['tipo'] = '✅ A Receber'
+venc_receber['valor'] = venc_receber['valor_parcela']
+venc_receber['interessado'] = venc_receber['clientes'].apply(lambda x: x['nome'] if isinstance(x, dict) else 'N/A')
+
+# Prepara dados a pagar
+df_pagar['data_vencimento'] = pd.to_datetime(df_pagar['data_vencimento'])
+venc_pagar = df_pagar[(df_pagar['data_vencimento'] >= hoje) & (df_pagar['data_vencimento'] <= data_fim_semana) & (df_pagar['status'] == 'Pendente')]
+venc_pagar['tipo'] = '💸 A Pagar'
+venc_pagar['interessado'] = df_pagar['fornecedores'].apply(lambda x: x['nome_razao_social'] if isinstance(x, dict) else 'N/A')
+
+# Junta, ordena e exibe
+df_vencimentos = pd.concat([venc_receber[['data_vencimento', 'tipo', 'valor', 'interessado']], venc_pagar[['data_vencimento', 'tipo', 'valor', 'interessado']]])
+df_vencimentos = df_vencimentos.sort_values('data_vencimento')
+
+if df_vencimentos.empty:
+    st.success("Nenhum vencimento (a pagar ou a receber) nos próximos 7 dias.")
 else:
-    st.info("Não há saldos devedores para exibir.")
+    for _, row in df_vencimentos.iterrows():
+        st.info(f"{row['tipo']} de **{formatar_moeda(row['valor'])}** - Interessado: **{row['interessado']}** - Vence em: {row['data_vencimento'].strftime('%d/%m/%Y')}")
