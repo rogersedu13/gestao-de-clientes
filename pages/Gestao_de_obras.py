@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from supabase import create_client, Client
 from utils import check_auth, get_supabase_client, formatar_moeda
 
 # --- Autenticação e Conexão ---
@@ -22,25 +23,32 @@ with st.sidebar:
     st.markdown("---"); st.info("Desenvolvido por @Rogerio Souza")
 
 # --- Funções da Página ---
+
+# <<<<===== CORREÇÃO APLICADA AQUI =====>>>>
 @st.cache_data(ttl=60)
-def carregar_obras():
-    response = supabase.table('obras').select('*').eq('ativo', True).order('nome_obra').execute()
+def carregar_obras(_supabase_client: Client) -> pd.DataFrame:
+    # A função agora recebe o cliente supabase como argumento
+    response = _supabase_client.table('obras').select('*').eq('ativo', True).order('nome_obra').execute()
     return pd.DataFrame(response.data)
 
+# <<<<===== CORREÇÃO APLICADA AQUI =====>>>>
 @st.cache_data(ttl=60)
-def carregar_receitas_por_obra():
-    # CORREÇÃO: Sintaxe do filtro .not_() ajustada
-    response = supabase.table('debitos').select('obra_id, valor_total').not_('obra_id', 'is', None).execute()
+def carregar_receitas_por_obra(_supabase_client: Client) -> pd.Series:
+    response = _supabase_client.table('debitos').select('obra_id, valor_total').not_('obra_id', 'is', None).execute()
     df = pd.DataFrame(response.data)
-    if df.empty: return pd.Series(dtype='float64')
+    if df.empty or 'obra_id' not in df.columns or df['obra_id'].isnull().all():
+        return pd.Series(dtype='float64')
+    df['valor_total'] = pd.to_numeric(df['valor_total'], errors='coerce').fillna(0)
     return df.groupby('obra_id')['valor_total'].sum()
 
+# <<<<===== CORREÇÃO APLICADA AQUI =====>>>>
 @st.cache_data(ttl=60)
-def carregar_custos_por_obra():
-    # CORREÇÃO: Sintaxe do filtro .not_() ajustada
-    response = supabase.table('contas_a_pagar').select('obra_id, valor').not_('obra_id', 'is', None).execute()
+def carregar_custos_por_obra(_supabase_client: Client) -> pd.Series:
+    response = _supabase_client.table('contas_a_pagar').select('obra_id, valor').not_('obra_id', 'is', None).execute()
     df = pd.DataFrame(response.data)
-    if df.empty: return pd.Series(dtype='float64')
+    if df.empty or 'obra_id' not in df.columns or df['obra_id'].isnull().all():
+        return pd.Series(dtype='float64')
+    df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0)
     return df.groupby('obra_id')['valor'].sum()
 
 def cadastrar_obra(nome, endereco, data_inicio, data_fim, status, valor, responsavel, obs):
@@ -64,25 +72,33 @@ tab_painel, tab_cadastro = st.tabs(["Painel de Obras", "Cadastrar Nova Obra"])
 with tab_painel:
     st.subheader("Painel Geral das Obras")
     
-    df_obras = carregar_obras()
-    df_receitas = carregar_receitas_por_obra()
-    df_custos = carregar_custos_por_obra()
+    # <<<<===== CORREÇÃO APLICADA AQUI =====>>>>
+    # Passamos o objeto 'supabase' como argumento para as funções
+    df_obras = carregar_obras(supabase)
+    df_receitas = carregar_receitas_por_obra(supabase)
+    df_custos = carregar_custos_por_obra(supabase)
 
+    # Junta as receitas
     if not df_receitas.empty:
         df_obras = df_obras.merge(df_receitas.rename('receita_total'), left_on='id', right_index=True, how='left')
     df_obras['receita_total'] = df_obras.get('receita_total', 0).fillna(0)
     
+    # Junta os custos
     if not df_custos.empty:
         df_obras = df_obras.merge(df_custos.rename('custo_total'), left_on='id', right_index=True, how='left')
     df_obras['custo_total'] = df_obras.get('custo_total', 0).fillna(0)
     
+    # Calcula a lucratividade
     df_obras['lucratividade'] = df_obras['receita_total'] - df_obras['custo_total']
 
+    # Indicadores Rápidos
     col1, col2 = st.columns(2)
     if 'status' in df_obras.columns:
         obras_em_andamento = df_obras[df_obras['status'] == 'Em Andamento'].shape[0]
         col1.metric("Obras em Andamento", obras_em_andamento)
-    
+    else:
+        col1.metric("Obras em Andamento", "N/A", help="Coluna 'status' não encontrada.")
+
     lucratividade_total = df_obras['lucratividade'].sum()
     col2.metric("Lucratividade Total Prevista", formatar_moeda(lucratividade_total))
 
@@ -99,6 +115,10 @@ with tab_painel:
                 c1.metric("Receita Prevista", formatar_moeda(row.get('receita_total')))
                 c2.metric("Custos Lançados", formatar_moeda(row.get('custo_total')))
                 c3.metric("Lucro Previsto", formatar_moeda(row.get('lucratividade')))
+                
+                if row.get('receita_total', 0) > 0:
+                    percentual_custo = (row.get('custo_total', 0) / row.get('receita_total', 1)) * 100
+                    st.progress(int(percentual_custo), text=f"{percentual_custo:.1f}% dos custos em relação à receita")
 
 with tab_cadastro:
     st.subheader("Cadastrar Nova Obra")
