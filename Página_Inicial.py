@@ -1,11 +1,10 @@
-# Página_Inicial.py
+# Página_Inicial.py (ou Dashboard.py)
 import streamlit as st
 from supabase import create_client, Client
 from utils import get_supabase_client
 
 # --- Configuração da Página ---
-# Usamos layout="wide" para aproveitar melhor o espaço das colunas
-st.set_page_config(page_title="Gestão de Clientes | Construtora", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Sistema de Gestão", page_icon="🏗️", layout="wide")
 
 # --- Conexão e Autenticação ---
 supabase = get_supabase_client()
@@ -41,20 +40,20 @@ with st.sidebar:
 
 if not st.session_state.logged_in:
     
-    # --- NOVO LAYOUT DA TELA DE LOGIN ---
+    # --- LAYOUT DA TELA DE LOGIN ---
     
     st.markdown("<br><br>", unsafe_allow_html=True) # Espaçamento vertical
     
     col1, col2 = st.columns([0.8, 1])
 
     with col1:
-        st.image("https://placehold.co/400x200/FFFFFF/000000?text=Logo+da+Empresa", use_column_width=True)
+        # A linha st.image(...) foi removida daqui.
         st.title("Sistema de Gestão")
         st.subheader("Construtora")
         st.markdown("---")
         st.markdown("""
         Bem-vindo ao portal de gestão. 
-        Por favor, faca o login para acessar o painel.
+        Use o menu na barra lateral para navegar entre as seções do sistema.
         """)
 
     with col2:
@@ -85,4 +84,4 @@ else:
     st.info("👈 Use o menu na barra lateral para navegar entre as seções do sistema.")
     st.image("https://images.unsplash.com/photo-1581092446347-a70c323f412c?q=80&w=2070&auto=format&fit=crop",
              caption="O controle de suas obras e finanças em um só lugar.",
-             use_column_width=True)
+             use_container_width=True)
