@@ -41,11 +41,11 @@ def carregar_receita_obras():
     
     return df.groupby('obra_id')['valor_total'].sum()
 
-def cadastrar_obra(nome, endereco, data_inicio, data_fim, status, valor, responsavel, obs):
+def cadastrar_obra(nome, endereco, data_inicio, data_fim_prevista, status, valor, responsavel, obs):
     try:
         obra_data = {
             'nome_obra': nome, 'endereco': endereco, 'data_inicio': data_inicio.strftime('%Y-%m-%d'),
-            'data_fim_prevista': data_fim.strftime('%Y-%m-%d'), 'status': status, 'valor_obra': valor,
+            'data_fim_prevista': data_fim_prevista.strftime('%Y-%m-%d'), 'status': status, 'valor_obra': valor,
             'responsavel_obra': responsavel, 'observacoes': obs
         }
         supabase.table('obras').insert(obra_data).execute()
@@ -75,11 +75,20 @@ with tab_painel:
 
     # Indicadores Rápidos
     col1, col2 = st.columns(2)
-    obras_em_andamento = df_obras[df_obras['status'] == 'Em Andamento'].shape[0]
-    col1.metric("Obras em Andamento", obras_em_andamento)
     
-    orcamento_total = df_obras['valor_obra'].sum()
-    col2.metric("Valor Total das Obras", formatar_moeda(orcamento_total))
+    # Verifica se a coluna 'status' existe antes de usar
+    if 'status' in df_obras.columns:
+        obras_em_andamento = df_obras[df_obras['status'] == 'Em Andamento'].shape[0]
+        col1.metric("Obras em Andamento", obras_em_andamento)
+    else:
+        col1.metric("Obras em Andamento", "N/A", help="Coluna 'status' não encontrada.")
+
+    # Verifica se a coluna 'valor_obra' existe antes de usar
+    if 'valor_obra' in df_obras.columns:
+        orcamento_total = df_obras['valor_obra'].sum()
+        col2.metric("Valor Total das Obras", formatar_moeda(orcamento_total))
+    else:
+        col2.metric("Valor Total das Obras", "N/A", help="Coluna 'valor_obra' não encontrada.")
 
     st.markdown("---")
     st.subheader("Lista de Obras")
@@ -88,10 +97,10 @@ with tab_painel:
         st.info("Nenhuma obra cadastrada. Adicione uma na aba 'Cadastrar Nova Obra'.")
     else:
         for _, row in df_obras.iterrows():
-            with st.expander(f"**{row['nome_obra']}** | Status: {row['status']}"):
+            with st.expander(f"**{row.get('nome_obra', 'Obra sem nome')}** | Status: {row.get('status', 'N/A')}"):
                 cols = st.columns(4)
                 cols[0].markdown(f"**Responsável:**<br>{row.get('responsavel_obra', 'N/A')}", unsafe_allow_html=True)
-                cols[1].markdown(f"**Início:**<br>{pd.to_datetime(row['data_inicio']).strftime('%d/%m/%Y') if row.get('data_inicio') else 'N/A'}", unsafe_allow_html=True)
+                cols[1].markdown(f"**Início:**<br>{pd.to_datetime(row.get('data_inicio')).strftime('%d/%m/%Y') if row.get('data_inicio') else 'N/A'}", unsafe_allow_html=True)
                 cols[2].markdown(f"**Valor da Obra:**<br>{formatar_moeda(row.get('valor_obra'))}", unsafe_allow_html=True)
                 cols[3].markdown(f"**Receita Vinculada:**<br>{formatar_moeda(row.get('receita_total'))}", unsafe_allow_html=True)
                 # O botão "Ver Detalhes" pode ser implementado no futuro
@@ -101,15 +110,12 @@ with tab_cadastro:
     st.subheader("Cadastrar Nova Obra")
     with st.form("nova_obra_form", clear_on_submit=True):
         nome = st.text_input("Nome da Obra*", help="Campo obrigatório")
-        
-        # AQUI ESTAVA O ERRO DE DIGITAÇÃO
-        endereco = st.text_input("Endereço da Obra") # Corrigido de "esdereco" para "endereco"
-        
+        endereco = st.text_input("Endereço da Obra")
         responsavel = st.text_input("Responsável pela Obra (Mestre de Obra)")
         
         col_data1, col_data2 = st.columns(2)
         data_inicio = col_data1.date_input("Data de Início", value=date.today())
-        data_fim = col_data2.date_input("Data Prevista de Conclusão", value=date.today() + timedelta(days=365))
+        data_fim_prevista = col_data2.date_input("Data Prevista de Conclusão", value=date.today() + timedelta(days=365))
         
         col_status, col_valor = st.columns(2)
         status = col_status.selectbox("Status Inicial", ["Planejamento", "Em Andamento", "Pausada", "Finalizada"])
@@ -121,6 +127,8 @@ with tab_cadastro:
             if not nome:
                 st.error("O campo 'Nome da Obra' é obrigatório.")
             else:
-                if cadastrar_obra(nome, endereco, data_inicio, data_fim, status, valor, responsavel, obs):
+                # <<<<===== AQUI ESTÁ A CORREÇÃO FINAL =====>>>>
+                # A chamada da função agora usa o nome correto da variável: data_fim_prevista
+                if cadastrar_obra(nome, endereco, data_inicio, data_fim_prevista, status, valor, responsavel, obs):
                     st.success(f"Obra '{nome}' cadastrada com sucesso!")
                     st.cache_data.clear()
