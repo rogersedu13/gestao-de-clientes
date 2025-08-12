@@ -28,24 +28,38 @@ def carregar_obras(_supabase_client: Client) -> pd.DataFrame:
     response = _supabase_client.table('obras').select('*').eq('ativo', True).order('nome_obra').execute()
     return pd.DataFrame(response.data)
 
+# <<<<===== FUNÇÃO CORRIGIDA COM LÓGICA ROBUSTA =====>>>>
 @st.cache_data(ttl=60)
 def carregar_receitas_por_obra(_supabase_client: Client) -> pd.Series:
-    # CORREÇÃO: A sintaxe correta para "não nulo" é a string 'null'
-    response = _supabase_client.table('debitos').select('obra_id, valor_total').not_('obra_id', 'is', 'null').execute()
+    # 1. Pega todos os débitos, sem filtro complexo
+    response = _supabase_client.table('debitos').select('obra_id, valor_total').execute()
     df = pd.DataFrame(response.data)
-    if df.empty or 'obra_id' not in df.columns or df['obra_id'].isnull().all():
-        return pd.Series(dtype='float64')
+    
+    # 2. Se estiver vazio, retorna
+    if df.empty: return pd.Series(dtype='float64')
+
+    # 3. Descarta as linhas sem obra_id e converte para número
+    df = df.dropna(subset=['obra_id'])
     df['valor_total'] = pd.to_numeric(df['valor_total'], errors='coerce').fillna(0)
+    
+    # 4. Agrupa e soma com segurança
     return df.groupby('obra_id')['valor_total'].sum()
 
+# <<<<===== FUNÇÃO CORRIGIDA COM LÓGICA ROBUSTA =====>>>>
 @st.cache_data(ttl=60)
 def carregar_custos_por_obra(_supabase_client: Client) -> pd.Series:
-    # CORREÇÃO: A sintaxe correta para "não nulo" é a string 'null'
-    response = _supabase_client.table('contas_a_pagar').select('obra_id, valor').not_('obra_id', 'is', 'null').execute()
+    # 1. Pega todas as contas, sem filtro complexo
+    response = _supabase_client.table('contas_a_pagar').select('obra_id, valor').execute()
     df = pd.DataFrame(response.data)
-    if df.empty or 'obra_id' not in df.columns or df['obra_id'].isnull().all():
-        return pd.Series(dtype='float64')
+
+    # 2. Se estiver vazio, retorna
+    if df.empty: return pd.Series(dtype='float64')
+
+    # 3. Descarta as linhas sem obra_id e converte para número
+    df = df.dropna(subset=['obra_id'])
     df['valor'] = pd.to_numeric(df['valor'], errors='coerce').fillna(0)
+
+    # 4. Agrupa e soma com segurança
     return df.groupby('obra_id')['valor'].sum()
 
 def cadastrar_obra(nome, endereco, data_inicio, data_fim, status, valor, responsavel, obs):
