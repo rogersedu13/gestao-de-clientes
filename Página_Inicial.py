@@ -1,4 +1,4 @@
-# Página_Inicial.py (ou Dashboard.py)
+# Página_Inicial.py
 import streamlit as st
 from supabase import create_client, Client
 from utils import get_supabase_client
@@ -40,23 +40,19 @@ with st.sidebar:
 
 if not st.session_state.logged_in:
     
-    # --- LAYOUT DA TELA DE LOGIN ---
+    # --- NOVO LAYOUT VERTICAL DA TELA DE LOGIN ---
     
-    st.markdown("<br><br>", unsafe_allow_html=True) # Espaçamento vertical
+    st.markdown("<br>", unsafe_allow_html=True) 
+
+    # Textos de boas-vindas centralizados
+    st.title("Sistema de Gestão", anchor=False)
+    st.write("Gestão de Clientes, Obras e Finanças.")
+    st.markdown("---")
     
-    col1, col2 = st.columns([0.8, 1])
+    # Centraliza o formulário de login usando colunas
+    _ , col_login, _ = st.columns([1, 1.5, 1])
 
-    with col1:
-        # A linha st.image(...) foi removida daqui.
-        st.title("Sistema de Gestão")
-        st.subheader("Construtora")
-        st.markdown("---")
-        st.markdown("""
-        Bem-vindo ao portal de gestão. 
-        Use o menu na barra lateral para navegar entre as seções do sistema.
-        """)
-
-    with col2:
+    with col_login:
         with st.container(border=True):
             st.header("Acesso ao Painel")
             with st.form("login_form"):
@@ -83,5 +79,5 @@ else:
     st.markdown("---")
     st.info("👈 Use o menu na barra lateral para navegar entre as seções do sistema.")
     st.image("https://images.unsplash.com/photo-1581092446347-a70c323f412c?q=80&w=2070&auto=format&fit=crop",
-             caption="O controle de suas obras e finanças em um só lugar.",
+             caption="Gestão de Clientes, Obras e Finanças.",
              use_container_width=True)
